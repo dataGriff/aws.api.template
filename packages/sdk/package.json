@@ -1,0 +1,26 @@
+{
+  "name": "@app/sdk",
+  "version": "0.0.0",
+  "description": "Generated TypeScript client for the Todo API",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "publishConfig": {
+    "access": "restricted"
+  },
+  "scripts": {
+    "gen": "kubb generate --config kubb.config.ts",
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@kubb/cli": "^3.5.0",
+    "@kubb/core": "^3.5.0",
+    "@kubb/plugin-client": "^3.5.0",
+    "@kubb/plugin-oas": "^3.5.0",
+    "@kubb/plugin-ts": "^3.5.0",
+    "@kubb/plugin-zod": "^3.5.0"
+  }
+}

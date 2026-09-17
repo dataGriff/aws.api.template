@@ -1,0 +1,5 @@
+# health requests — generated from api/openapi.yaml by task gen. Do not edit.
+# Select an environment (local/dev/staging/prod) in http-client.env.json.
+
+### get_health — Liveness/readiness probe
+GET {{baseUrl}}/health
