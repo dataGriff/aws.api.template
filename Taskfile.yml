@@ -82,7 +82,12 @@ tasks:
       - pnpm --filter @app/contracts gen
       - pnpm --filter @app/sdk gen
       - task: gen:httpfiles
+      - task: gen:gateway
       - task: docs:api
+  gen:gateway:
+    desc: Render the API Gateway spec (AWS extensions) from the contract
+    cmds:
+      - node scripts/render-gateway-spec.mjs
   gen:check:
     desc: Fail if generated artifacts are stale (contract drift gate)
     cmds:

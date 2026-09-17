@@ -25,7 +25,3 @@ lefthook = "latest"
 # Loaded into the shell (and CI) for every task. Non-secret defaults only.
 APP_ENV = "local"
 AWS_REGION = "eu-west-2"
-
-[settings]
-# Allow the npm/pipx backends used above.
-pipx_uvx = true
