@@ -16,5 +16,3 @@ See [backlog.md](backlog.md) for the full ticket list. Epics:
 6. Local dev
 7. CI/CD & extras
 8. Docs & adopt-contract skill
-
-_Expanded in Phase 8._

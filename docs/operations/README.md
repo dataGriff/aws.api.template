@@ -31,5 +31,3 @@ endpoint to the same topic instead. Thresholds are tunable via the module variab
 (`error_threshold`, `latency_p99_ms`, `pinning_threshold`).
 
 Alarm actions and the dashboard are visible in the CloudWatch console under the `<service>-<env>` name.
-
-_Runbook detail (paging, escalation) expanded in Phase 8._

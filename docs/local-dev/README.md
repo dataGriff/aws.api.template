@@ -9,5 +9,3 @@ Everything runs locally with no AWS account.
   fidelity is partial, a **static-JWKS stub authorizer** is available so tests never depend on emulator
   quirks; the real pre-token trigger logic is exercised by unit tests.
 - **SQL**: `task db:query -- <name>` runs a curated example query; `task db:console` opens Harlequin.
-
-_Expanded in Phase 8._

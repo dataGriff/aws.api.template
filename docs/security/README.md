@@ -13,5 +13,3 @@ The template is secure-by-default.
 - **Supply chain / CI**: gitleaks, Trivy, tfsec + Checkov, semgrep, and a CycloneDX SBOM — all via
   `task` targets so they run identically in hooks and CI. IAM is least-privilege; deploy uses OIDC
   (no long-lived keys), trust scoped per repo + branch/tag.
-
-_Expanded in Phase 8._

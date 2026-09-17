@@ -12,5 +12,3 @@ Each layer owns a distinct concern — no overlap.
 
 **Boundaries:** BDD encodes human business rules; Contract checks example conformance; Schemathesis
 explores the input space (given a valid token, scoped to conformance — it never asserts business rules).
-
-_Expanded in Phase 8._
