@@ -1,9 +1,7 @@
 {
-  "files": [],
-  "references": [
-    { "path": "packages/contracts" },
-    { "path": "packages/api" },
-    { "path": "packages/sdk" },
-    { "path": "packages/cognito-pretoken" }
-  ]
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "."
+  },
+  "include": ["packages/*/src/**/*.ts", "packages/*/test/**/*.ts", "local/**/*.ts"]
 }

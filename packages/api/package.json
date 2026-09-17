@@ -1,0 +1,40 @@
+{
+  "name": "@app/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "serve": "tsx watch ../../local/server.ts",
+    "db:migrate": "node-pg-migrate up -m src/db/migrations --no-lock",
+    "db:migrate:down": "node-pg-migrate down -m src/db/migrations --no-lock",
+    "test:unit": "vitest run test/unit",
+    "test:integration": "vitest run test/integration",
+    "test:bdd": "cucumber-js",
+    "test:contract": "vitest run test/contract"
+  },
+  "dependencies": {
+    "@app/contracts": "workspace:*",
+    "@aws-lambda-powertools/idempotency": "^2.10.0",
+    "@aws-lambda-powertools/logger": "^2.10.0",
+    "@aws-lambda-powertools/metrics": "^2.10.0",
+    "@aws-lambda-powertools/parameters": "^2.10.0",
+    "@aws-lambda-powertools/tracer": "^2.10.0",
+    "@aws-sdk/client-dynamodb": "^3.679.0",
+    "@aws-sdk/rds-signer": "^3.679.0",
+    "@middy/core": "^5.5.1",
+    "@middy/http-header-normalizer": "^5.5.1",
+    "pg": "^8.13.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@cucumber/cucumber": "^11.1.0",
+    "@types/aws-lambda": "^8.10.145",
+    "@types/pg": "^8.11.10",
+    "esbuild": "^0.24.0",
+    "node-pg-migrate": "^7.7.1",
+    "testcontainers": "^10.13.2",
+    "tsx": "^4.19.2",
+    "vitest": "^2.1.4"
+  }
+}

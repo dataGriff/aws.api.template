@@ -35,15 +35,15 @@ task ci
 
 ## What you get
 
-| Area | Highlights |
-| --- | --- |
-| **Contract-first** | `api/openapi.yaml` → generated zod+types, consumer SDK, Prism mock, `.http` collection, Redocly API reference. Drift is CI-gated. |
-| **Secure auth** | Cognito user pool + app clients, **pre-token-generation trigger** adds custom claims, gateway Cognito authorizer, API keys + usage plans, WAF (opt-in). |
-| **Data** | Postgres via RDS Proxy (IAM auth, pooled), parameterisable Aurora Serverless v2 ↔ RDS. Forward-only migrations run out-of-band. |
-| **Infra** | Terraform modules + `dev/staging/prod` envs, OIDC (no long-lived keys), S3+DynamoDB state. Opt-in flags: WAF, RDS Proxy, egress/ingress static IP, custom DNS. |
-| **Testing** | vitest unit + integration (testcontainers), cucumber-js BDD, Prism contract, Schemathesis fuzz. |
-| **DX** | mise + Taskfile, lefthook hooks (`task check` / `task ci`), one CI that runs identically locally. |
-| **Ops** | CloudWatch dashboard + alarms, X-Ray tracing, structured logs, SBOM, Infracost, semantic-release. |
+| Area               | Highlights                                                                                                                                                     |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Contract-first** | `api/openapi.yaml` → generated zod+types, consumer SDK, Prism mock, `.http` collection, Redocly API reference. Drift is CI-gated.                              |
+| **Secure auth**    | Cognito user pool + app clients, **pre-token-generation trigger** adds custom claims, gateway Cognito authorizer, API keys + usage plans, WAF (opt-in).        |
+| **Data**           | Postgres via RDS Proxy (IAM auth, pooled), parameterisable Aurora Serverless v2 ↔ RDS. Forward-only migrations run out-of-band.                                |
+| **Infra**          | Terraform modules + `dev/staging/prod` envs, OIDC (no long-lived keys), S3+DynamoDB state. Opt-in flags: WAF, RDS Proxy, egress/ingress static IP, custom DNS. |
+| **Testing**        | vitest unit + integration (testcontainers), cucumber-js BDD, Prism contract, Schemathesis fuzz.                                                                |
+| **DX**             | mise + Taskfile, lefthook hooks (`task check` / `task ci`), one CI that runs identically locally.                                                              |
+| **Ops**            | CloudWatch dashboard + alarms, X-Ray tracing, structured logs, SBOM, Infracost, semantic-release.                                                              |
 
 ## Documentation
 

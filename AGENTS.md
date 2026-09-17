@@ -22,16 +22,16 @@ app. See `docs/architecture/` for the full picture.
 
 ## Common commands
 
-| Command | Purpose |
-| --- | --- |
-| `mise install` | Install all pinned tools |
+| Command                 | Purpose                                                       |
+| ----------------------- | ------------------------------------------------------------- |
+| `mise install`          | Install all pinned tools                                      |
 | `task up` / `task down` | Start / stop the local stack (Postgres, cognito-local, Prism) |
-| `task gen` | Regenerate everything from the contract |
-| `task check` | Fast gate (pre-commit) |
-| `task ci` | Full gate — identical locally and in CI |
-| `task test:fuzz` | Schemathesis property fuzzing |
-| `task db:console` | Interactive SQL (Harlequin) |
-| `task deploy ENV=dev` | Deploy an environment |
+| `task gen`              | Regenerate everything from the contract                       |
+| `task check`            | Fast gate (pre-commit)                                        |
+| `task ci`               | Full gate — identical locally and in CI                       |
+| `task test:fuzz`        | Schemathesis property fuzzing                                 |
+| `task db:console`       | Interactive SQL (Harlequin)                                   |
+| `task deploy ENV=dev`   | Deploy an environment                                         |
 
 ## Where to look
 

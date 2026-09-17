@@ -11,8 +11,7 @@
     "./types": "./src/generated/types/index.ts"
   },
   "scripts": {
-    "gen": "kubb generate --config kubb.config.ts",
-    "build": "tsc -b"
+    "gen": "kubb generate --config kubb.config.ts"
   },
   "dependencies": {
     "zod": "^3.23.8"
