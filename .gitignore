@@ -25,6 +25,10 @@ crash.log
 sbom.cdx.json
 infracost.json
 
+# cognito-local runtime state (keep config.json)
+local/cognito-local/*
+!local/cognito-local/config.json
+
 # OS / editor
 .DS_Store
 .idea/

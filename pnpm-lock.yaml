@@ -64,11 +64,14 @@ importers:
         version: 2.35.0(@middy/core@5.5.1)
       '@aws-lambda-powertools/parameters':
         specifier: ^2.10.0
-        version: 2.35.0(@aws-sdk/client-dynamodb@3.1134.0)(@middy/core@5.5.1)
+        version: 2.35.0(@aws-sdk/client-dynamodb@3.1134.0)(@aws-sdk/client-secrets-manager@3.1134.0)(@middy/core@5.5.1)
       '@aws-lambda-powertools/tracer':
         specifier: ^2.10.0
         version: 2.35.0(@middy/core@5.5.1)
       '@aws-sdk/client-dynamodb':
+        specifier: ^3.679.0
+        version: 3.1134.0
+      '@aws-sdk/client-secrets-manager':
         specifier: ^3.679.0
         version: 3.1134.0
       '@aws-sdk/rds-signer':
@@ -90,6 +93,9 @@ importers:
       '@cucumber/cucumber':
         specifier: ^11.1.0
         version: 11.3.0
+      '@testcontainers/postgresql':
+        specifier: ^10.13.2
+        version: 10.28.0
       '@types/aws-lambda':
         specifier: ^8.10.145
         version: 8.10.163
@@ -269,6 +275,10 @@ packages:
 
   '@aws-sdk/client-dynamodb@3.1134.0':
     resolution: {integrity: sha512-i2FzVUVQWT0fEPE7/CxIP0620svDeNZKw4yU7VAa1s3otwXJ7CP2hgblvbPD6H3p+mTNSPfHoEyxK0iZDmBODQ==}
+    engines: {node: '>=20.0.0'}
+
+  '@aws-sdk/client-secrets-manager@3.1134.0':
+    resolution: {integrity: sha512-zU5qnW369Kpn4PFuV8R8zWqefbjy4ZRIXTSN3hCFN1elIxZsb0avXUQ/wamh4WXVWCR0exBlaDgvO+8nxWHOvw==}
     engines: {node: '>=20.0.0'}
 
   '@aws-sdk/core@3.978.0':
@@ -1591,6 +1601,9 @@ packages:
   '@teppeis/multimaps@3.0.0':
     resolution: {integrity: sha512-ID7fosbc50TbT0MK0EG12O+gAP3W3Aa/Pz4DaTtQtEvlc9Odaqi0de+xuZ7Li2GtK4HzEX7IuRWS/JmZLksR3Q==}
     engines: {node: '>=14'}
+
+  '@testcontainers/postgresql@10.28.0':
+    resolution: {integrity: sha512-NN25rruG5D4Q7pCNIJuHwB+G85OSeJ3xHZ2fWx0O6sPoPEfCYwvpj8mq99cyn68nxFkFYZeyrZJtSFO+FnydiA==}
 
   '@types/aws-lambda@8.10.163':
     resolution: {integrity: sha512-+4zuoEB3S8RIhimtOFT7zAEk2SbpwrKjjGl9CyYnQR6k08uynxfauIIB0pDU1ssr05F8oyGiETwpn+8eXZMqPw==}
@@ -4012,11 +4025,12 @@ snapshots:
     optionalDependencies:
       '@middy/core': 5.5.1
 
-  '@aws-lambda-powertools/parameters@2.35.0(@aws-sdk/client-dynamodb@3.1134.0)(@middy/core@5.5.1)':
+  '@aws-lambda-powertools/parameters@2.35.0(@aws-sdk/client-dynamodb@3.1134.0)(@aws-sdk/client-secrets-manager@3.1134.0)(@middy/core@5.5.1)':
     dependencies:
       '@aws-lambda-powertools/commons': 2.35.0
     optionalDependencies:
       '@aws-sdk/client-dynamodb': 3.1134.0
+      '@aws-sdk/client-secrets-manager': 3.1134.0
       '@middy/core': 5.5.1
 
   '@aws-lambda-powertools/tracer@2.35.0(@middy/core@5.5.1)':
@@ -4033,6 +4047,17 @@ snapshots:
       '@aws-sdk/credential-provider-node': 3.972.83
       '@aws-sdk/dynamodb-codec': 3.973.45
       '@aws-sdk/middleware-endpoint-discovery': 3.972.30
+      '@aws-sdk/types': 3.974.5
+      '@smithy/core': 3.34.1
+      '@smithy/fetch-http-handler': 5.8.0
+      '@smithy/node-http-handler': 4.12.1
+      '@smithy/types': 4.18.0
+      tslib: 2.8.1
+
+  '@aws-sdk/client-secrets-manager@3.1134.0':
+    dependencies:
+      '@aws-sdk/core': 3.978.0
+      '@aws-sdk/credential-provider-node': 3.972.83
       '@aws-sdk/types': 3.974.5
       '@smithy/core': 3.34.1
       '@smithy/fetch-http-handler': 5.8.0
@@ -5285,6 +5310,15 @@ snapshots:
       tslib: 2.8.1
 
   '@teppeis/multimaps@3.0.0': {}
+
+  '@testcontainers/postgresql@10.28.0':
+    dependencies:
+      testcontainers: 10.28.0
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - react-native-b4a
+      - supports-color
 
   '@types/aws-lambda@8.10.163': {}
 

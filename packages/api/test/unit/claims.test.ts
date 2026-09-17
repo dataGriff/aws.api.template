@@ -1,0 +1,41 @@
+import { describe, expect, it } from "vitest";
+import { extractAuth, isAdmin } from "../../src/auth/claims.js";
+import { UnauthorizedError } from "../../src/errors.js";
+import { buildEvent } from "../helpers/events.js";
+
+describe("extractAuth", () => {
+  it("reads sub and tenant from validated claims", () => {
+    const auth = extractAuth(
+      buildEvent({
+        method: "GET",
+        resource: "/todos",
+        claims: { sub: "u1", "custom:tenant_id": "t1" },
+      }),
+    );
+    expect(auth).toMatchObject({ userSub: "u1", tenantId: "t1", groups: [] });
+  });
+
+  it("parses cognito:groups into an array", () => {
+    const auth = extractAuth(
+      buildEvent({
+        method: "GET",
+        resource: "/todos",
+        claims: { sub: "u1", "custom:tenant_id": "t1", "cognito:groups": "[admin,ops]" },
+      }),
+    );
+    expect(auth.groups).toEqual(["admin", "ops"]);
+    expect(isAdmin(auth)).toBe(true);
+  });
+
+  it("rejects a token missing required claims", () => {
+    expect(() =>
+      extractAuth(buildEvent({ method: "GET", resource: "/todos", claims: { sub: "u1" } })),
+    ).toThrow(UnauthorizedError);
+  });
+
+  it("rejects an unauthenticated request", () => {
+    expect(() =>
+      extractAuth(buildEvent({ method: "GET", resource: "/todos", claims: null })),
+    ).toThrow(UnauthorizedError);
+  });
+});

@@ -62,7 +62,7 @@ for (const [, item] of Object.entries(spec.paths)) {
     summary: "CORS preflight",
     security: [],
     responses: {
-      "204": {
+      204: {
         description: "CORS headers",
         headers: Object.fromEntries(
           Object.keys(corsHeaders).map((h) => [h, { schema: { type: "string" } }]),
@@ -76,10 +76,7 @@ for (const [, item] of Object.entries(spec.paths)) {
         default: {
           statusCode: "204",
           responseParameters: Object.fromEntries(
-            Object.entries(corsHeaders).map(([h, v]) => [
-              `method.response.header.${h}`,
-              v,
-            ]),
+            Object.entries(corsHeaders).map(([h, v]) => [`method.response.header.${h}`, v]),
           ),
         },
       },

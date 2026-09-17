@@ -1,0 +1,9 @@
+{
+  "UserPoolDefaults": {
+    "UsernameAttributes": ["email"]
+  },
+  "TriggerFunctions": {},
+  "TokenConfig": {
+    "IssuerDomain": "http://localhost:9229"
+  }
+}

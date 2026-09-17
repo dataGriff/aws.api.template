@@ -17,12 +17,12 @@ Runbooks for deploying and operating the API.
 The `observability` module ships an SNS topic (`<service>-<env>-alarms`) and these CloudWatch alarms,
 all wired to that topic:
 
-| Alarm | Source metric | Default trigger | Why |
-| --- | --- | --- | --- |
-| `lambda-errors` | `AWS/Lambda Errors` | > 5 in 5 min | Handler failures |
-| `lambda-throttles` | `AWS/Lambda Throttles` | ≥ 1 in 5 min | Concurrency exhaustion |
-| `api-5xx` | `AWS/ApiGateway 5XXError` | > 5 in 5 min | Server-side failures |
-| `api-latency-p99` | `AWS/ApiGateway Latency` p99 | > 2000 ms | Latency regressions |
+| Alarm                   | Source metric                                       | Default trigger  | Why                                          |
+| ----------------------- | --------------------------------------------------- | ---------------- | -------------------------------------------- |
+| `lambda-errors`         | `AWS/Lambda Errors`                                 | > 5 in 5 min     | Handler failures                             |
+| `lambda-throttles`      | `AWS/Lambda Throttles`                              | ≥ 1 in 5 min     | Concurrency exhaustion                       |
+| `api-5xx`               | `AWS/ApiGateway 5XXError`                           | > 5 in 5 min     | Server-side failures                         |
+| `api-latency-p99`       | `AWS/ApiGateway Latency` p99                        | > 2000 ms        | Latency regressions                          |
 | `db-connection-pinning` | `AWS/RDS DatabaseConnectionsCurrentlySessionPinned` | > 5 (proxy only) | RDS Proxy pinning silently disabling pooling |
 
 **Get notified:** set `alarm_email` (per env, e.g. in `terraform.tfvars` or via CI) to subscribe an

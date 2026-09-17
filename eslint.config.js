@@ -43,10 +43,16 @@ export default tseslint.config(
   },
   // Tests and scripts touch the filesystem and use loose typing intentionally.
   {
-    files: ["**/*.test.ts", "**/test/**", "**/features/**", "scripts/**"],
+    files: ["**/*.test.ts", "**/test/**", "**/features/**", "scripts/**", "local/**"],
     rules: {
       "security/detect-non-literal-fs-filename": "off",
       "security/detect-object-injection": "off",
+      "@typescript-eslint/no-unsafe-assignment": "off",
+      "@typescript-eslint/no-unsafe-member-access": "off",
+      "@typescript-eslint/no-unsafe-argument": "off",
+      "@typescript-eslint/no-unsafe-call": "off",
+      "@typescript-eslint/no-non-null-assertion": "off",
+      "@typescript-eslint/no-unnecessary-type-assertion": "off",
     },
   },
 );

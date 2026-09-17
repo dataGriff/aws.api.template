@@ -3,12 +3,16 @@ import httpHeaderNormalizer from "@middy/http-header-normalizer";
 import { injectLambdaContext } from "@aws-lambda-powertools/logger/middleware";
 import { captureLambdaHandler } from "@aws-lambda-powertools/tracer/middleware";
 import { logMetrics } from "@aws-lambda-powertools/metrics/middleware";
+import { MetricUnit } from "@aws-lambda-powertools/metrics";
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { dispatch } from "./router/index.js";
 import { errorMapper } from "./middleware/error-mapper.js";
 import { logger, metrics, tracer } from "./observability.js";
 
-const base = (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => dispatch(event);
+const base = (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
+  metrics.addMetric("invocation", MetricUnit.Count, 1);
+  return dispatch(event);
+};
 
 // Middy stack (outer → inner): header normalization, Powertools logging/tracing/
 // metrics, then the generated-route dispatch. errorMapper converts thrown errors

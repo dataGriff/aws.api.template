@@ -69,6 +69,14 @@ export async function getPool(): Promise<Pool> {
   return pool;
 }
 
+// Test/shutdown helper — closes and clears the cached pool.
+export async function closePool(): Promise<void> {
+  if (pool) {
+    await pool.end();
+    pool = undefined;
+  }
+}
+
 // Convenience query helper.
 export async function query<T>(text: string, params: readonly unknown[] = []): Promise<T[]> {
   const p = await getPool();
