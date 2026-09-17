@@ -1,0 +1,31 @@
+{
+  "name": "aws-api-template",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Best-practice secure AWS API template (TypeScript · Lambda · Postgres · REST API · Cognito)",
+  "packageManager": "pnpm@9.12.3",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc -b"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.5.0",
+    "@commitlint/config-conventional": "^19.5.0",
+    "@eslint/js": "^9.14.0",
+    "@types/node": "^22.9.0",
+    "@vitest/coverage-v8": "^2.1.4",
+    "eslint": "^9.14.0",
+    "eslint-plugin-security": "^3.0.1",
+    "prettier": "^3.3.3",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.13.0",
+    "vitest": "^2.1.4"
+  }
+}

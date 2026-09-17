@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+*.tsbuildinfo
+packages/*/coverage/
+coverage/
+
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+
+# Secrets / local env
+.env
+.env.*
+!.env.example
+*.pem
+
+# Artifacts
+sbom.cdx.json
+infracost.json
+
+# OS / editor
+.DS_Store
+.idea/
+*.log

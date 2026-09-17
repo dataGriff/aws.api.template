@@ -1,0 +1,31 @@
+# Single source of truth for tool versions.
+# Local dev, git hooks, and GitHub Actions all run `mise install` then invoke
+# Taskfile targets — guaranteeing identical tooling everywhere.
+[tools]
+node = "22"
+pnpm = "9"
+python = "3.12"
+terraform = "1.9"
+task = "3"
+tflint = "latest"
+tfsec = "latest"
+trivy = "latest"
+gitleaks = "latest"
+infracost = "latest"
+lefthook = "latest"
+"npm:@redocly/cli" = "latest"
+"npm:@stoplight/prism-cli" = "latest"
+"npm:httpyac" = "latest"
+"pipx:schemathesis" = "latest"
+"pipx:checkov" = "latest"
+"pipx:semgrep" = "latest"
+"pipx:harlequin" = "latest"
+
+[env]
+# Loaded into the shell (and CI) for every task. Non-secret defaults only.
+APP_ENV = "local"
+AWS_REGION = "eu-west-2"
+
+[settings]
+# Allow the npm/pipx backends used above.
+pipx_uvx = true

@@ -1,0 +1,242 @@
+# Single source of truth for every command.
+# Git hooks (lefthook) and GitHub Actions call ONLY `task <name>` — never inline
+# shell — so local and CI run identical code paths. Tool versions come from mise.
+version: "3"
+
+silent: true
+
+vars:
+  TF_DIR: infra/terraform
+  ENV: '{{.ENV | default "dev"}}'
+
+env:
+  APP_ENV: '{{.APP_ENV | default "local"}}'
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - task --list
+
+  # ---------------------------------------------------------------------------
+  # Aggregate gates
+  # ---------------------------------------------------------------------------
+  check:
+    desc: "Fast pre-commit gate: format, lint, typecheck, spec lint, gen-drift, secrets, unit"
+    cmds:
+      - task: format:check
+      - task: lint
+      - task: typecheck
+      - task: spec:lint
+      - task: gen:check
+      - task: security:secrets
+      - task: test:unit
+
+  ci:
+    desc: "Full gate — runs IDENTICALLY locally and in GitHub Actions"
+    cmds:
+      - task: check
+      - task: build
+      - task: test:integration
+      - task: test:bdd
+      - task: test:contract
+      - task: tf:validate
+      - task: tf:scan
+      - task: security:deps
+
+  # ---------------------------------------------------------------------------
+  # Code quality
+  # ---------------------------------------------------------------------------
+  format:
+    desc: Auto-format all files
+    cmds:
+      - pnpm format
+  format:check:
+    desc: Check formatting
+    cmds:
+      - pnpm format:check
+  lint:
+    desc: Lint (eslint + security plugin)
+    cmds:
+      - pnpm lint
+  typecheck:
+    desc: TypeScript typecheck across the workspace
+    cmds:
+      - pnpm typecheck
+  build:
+    desc: Build all packages
+    cmds:
+      - pnpm build
+
+  # ---------------------------------------------------------------------------
+  # Contract & codegen
+  # ---------------------------------------------------------------------------
+  spec:lint:
+    desc: Lint the OpenAPI contract (spectral rules incl. snake_case)
+    cmds:
+      - redocly lint api/openapi.yaml
+  gen:
+    desc: "Regenerate everything from the contract (contracts, SDK, mock cfg, docs, .http)"
+    cmds:
+      - task: spec:lint
+      - pnpm --filter @app/contracts gen
+      - pnpm --filter @app/sdk gen
+      - task: gen:httpfiles
+      - task: docs:api
+  gen:check:
+    desc: Fail if generated artifacts are stale (contract drift gate)
+    cmds:
+      - task: gen
+      - git diff --exit-code -- packages/contracts/src/generated packages/sdk/src/generated collections docs/api-reference || (echo "Generated artifacts are stale. Run 'task gen' and commit." && exit 1)
+  gen:httpfiles:
+    desc: Generate the .http request collection from the contract
+    cmds:
+      - node scripts/gen-http-collection.mjs
+  docs:api:
+    desc: Build the static API reference site from the contract
+    cmds:
+      - redocly build-docs api/openapi.yaml -o docs/api-reference/index.html
+
+  # ---------------------------------------------------------------------------
+  # Tests (layers kept distinct — see docs/testing)
+  # ---------------------------------------------------------------------------
+  test:
+    desc: Run unit + integration + BDD
+    cmds:
+      - task: test:unit
+      - task: test:integration
+      - task: test:bdd
+  test:unit:
+    desc: Unit tests (pure logic, no I/O)
+    cmds:
+      - pnpm --filter @app/api test:unit
+  test:integration:
+    desc: Integration tests (real Postgres via testcontainers + migrations)
+    cmds:
+      - pnpm --filter @app/api test:integration
+  test:bdd:
+    desc: "BDD / behavioural (cucumber-js) — executable acceptance criteria"
+    cmds:
+      - pnpm --filter @app/api test:bdd
+  test:contract:
+    desc: Contract conformance (Prism oracle + spectral)
+    cmds:
+      - pnpm --filter @app/api test:contract
+  test:fuzz:
+    desc: "Property-based fuzzing (Schemathesis) — nightly / on-spec-change"
+    cmds:
+      - ./scripts/schemathesis.sh
+
+  # ---------------------------------------------------------------------------
+  # Local dev
+  # ---------------------------------------------------------------------------
+  up:
+    desc: Start the local stack (Postgres, cognito-local, Prism mock, API)
+    cmds:
+      - docker compose -f local/docker-compose.yml up -d --wait
+      - task: db:migrate
+  down:
+    desc: Stop the local stack
+    cmds:
+      - docker compose -f local/docker-compose.yml down -v
+  serve:
+    desc: Run the Lambda handler behind a local HTTP server
+    cmds:
+      - pnpm --filter @app/api serve
+  token:
+    desc: "Mint a JWT (cognito-local locally / Cognito deployed) and write it to the .http env"
+    cmds:
+      - node scripts/mint-token.mjs {{.CLI_ARGS}}
+
+  # ---------------------------------------------------------------------------
+  # Database
+  # ---------------------------------------------------------------------------
+  db:migrate:
+    desc: Apply database migrations (env-aware)
+    cmds:
+      - pnpm --filter @app/api db:migrate
+  db:query:
+    desc: "Run a named example query via psql, e.g. task db:query -- todos_by_tenant"
+    cmds:
+      - ./scripts/db-query.sh {{.CLI_ARGS}}
+  db:console:
+    desc: Open Harlequin against the selected env for interactive SQL
+    cmds:
+      - ./scripts/db-console.sh
+
+  # ---------------------------------------------------------------------------
+  # Security scanning
+  # ---------------------------------------------------------------------------
+  security:
+    desc: Run all security scans
+    cmds:
+      - task: security:secrets
+      - task: security:deps
+      - task: security:code
+      - task: tf:scan
+      - task: sbom
+  security:secrets:
+    desc: Secret scanning (gitleaks)
+    cmds:
+      - gitleaks detect --no-banner --redact
+  security:deps:
+    desc: Dependency & filesystem vulnerability scan (trivy)
+    cmds:
+      - trivy fs --scanners vuln,misconfig --exit-code 1 --severity HIGH,CRITICAL .
+  security:code:
+    desc: Static analysis (semgrep)
+    cmds:
+      - semgrep --config auto --error
+  sbom:
+    desc: Generate a CycloneDX SBOM
+    cmds:
+      - trivy fs --format cyclonedx --output sbom.cdx.json .
+
+  # ---------------------------------------------------------------------------
+  # Terraform
+  # ---------------------------------------------------------------------------
+  tf:fmt:
+    desc: Format Terraform
+    cmds:
+      - terraform -chdir={{.TF_DIR}}/envs/{{.ENV}} fmt -recursive ../../
+  tf:validate:
+    desc: Terraform fmt-check + validate + tflint
+    dir: "{{.TF_DIR}}/envs/{{.ENV}}"
+    cmds:
+      - terraform fmt -check -recursive ../../
+      - terraform init -backend=false
+      - terraform validate
+      - tflint --chdir=../../
+  tf:scan:
+    desc: IaC security scan (tfsec + checkov)
+    cmds:
+      - tfsec {{.TF_DIR}}
+      - checkov -d {{.TF_DIR}} --quiet --compact
+  tf:plan:
+    desc: "Terraform plan for an env, e.g. task tf:plan ENV=dev"
+    dir: "{{.TF_DIR}}/envs/{{.ENV}}"
+    cmds:
+      - terraform init
+      - terraform plan -var-file=terraform.tfvars
+  tf:apply:
+    desc: "Terraform apply for an env (used by CI deploy)"
+    dir: "{{.TF_DIR}}/envs/{{.ENV}}"
+    cmds:
+      - terraform init
+      - terraform apply -auto-approve -var-file=terraform.tfvars
+
+  deploy:
+    desc: "Full deploy for an env: migrate then apply infra"
+    cmds:
+      - task: tf:apply
+        vars: { ENV: "{{.ENV}}" }
+      - task: db:migrate
+
+  # ---------------------------------------------------------------------------
+  # Cost
+  # ---------------------------------------------------------------------------
+  cost:
+    desc: Infracost breakdown for an env
+    dir: "{{.TF_DIR}}/envs/{{.ENV}}"
+    cmds:
+      - infracost breakdown --path .
