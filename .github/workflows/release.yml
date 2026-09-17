@@ -1,0 +1,76 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write # tags, releases, changelog commit
+  issues: write
+  pull-requests: write
+  id-token: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    outputs:
+      released: ${{ steps.semrel.outputs.new_release_published }}
+      version: ${{ steps.semrel.outputs.new_release_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: jdx/mise-action@v2
+        with: { install: true, cache: true }
+      - run: pnpm install --frozen-lockfile
+      - name: Semantic release
+        id: semrel
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx -y semantic-release@24 -e ./.releaserc.json
+
+  # Publish the generated consumer SDK. Runs only when a release happened and an
+  # NPM/registry token is configured. Set packages/sdk publishConfig.registry and
+  # the package scope to your org first (see docs/consumer-guide).
+  publish-sdk:
+    needs: release
+    if: ${{ needs.release.outputs.released == 'true' && vars.PUBLISH_SDK == 'true' }}
+    runs-on: ubuntu-latest
+    permissions: { contents: read, packages: write }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+        with: { install: true, cache: true }
+      - run: pnpm install --frozen-lockfile
+      - run: task gen
+      - name: Version + build SDK
+        run: |
+          pnpm --filter @app/sdk exec npm version "${{ needs.release.outputs.version }}" --no-git-tag-version
+          pnpm --filter @app/sdk build
+      - name: Publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm --filter @app/sdk publish --no-git-checks --no-git-tag-version
+
+  docs:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions: { contents: read, pages: write, id-token: write }
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+        with: { install: true, cache: true }
+      - run: pnpm install --frozen-lockfile
+      - name: Build API reference
+        run: task docs:api
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: docs/api-reference }
+      - id: deploy
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":dependencyDashboard", "group:allNonMajor"],
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true
+    },
+    {
+      "matchFileNames": [".mise.toml"],
+      "groupName": "mise tools"
+    }
+  ],
+  "lockFileMaintenance": { "enabled": true }
+}

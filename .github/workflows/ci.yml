@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Installs every tool pinned in .mise.toml, so CI uses the SAME versions
+      # as local dev and the git hooks.
+      - uses: jdx/mise-action@v2
+        with:
+          install: true
+          cache: true
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The one gate. Identical to running `task ci` on a laptop:
+      # format, lint, typecheck, spec lint, gen-drift, secrets, unit,
+      # build, integration (testcontainers), BDD, contract, terraform validate,
+      # terraform scan, dependency scan.
+      - name: task ci
+        run: task ci

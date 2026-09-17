@@ -1,0 +1,79 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        options: [dev, staging, prod]
+        default: dev
+
+permissions:
+  id-token: write # OIDC — no long-lived AWS keys
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # GitHub Environment protection rules gate staging/prod (configure in repo settings).
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+    env:
+      ENV: ${{ github.event.inputs.environment || 'dev' }}
+      AWS_REGION: ${{ vars.AWS_REGION || 'eu-west-2' }}
+      TF_DIR: infra/terraform/envs/${{ github.event.inputs.environment || 'dev' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+        with: { install: true, cache: true }
+
+      - run: pnpm install --frozen-lockfile
+
+      # Build the artifacts Terraform packages (Lambda bundles) and render the
+      # gateway spec — all from the contract.
+      - run: task gen
+      - run: task build
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform init
+        run: |
+          terraform -chdir="$TF_DIR" init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="region=${{ env.AWS_REGION }}"
+
+      - name: Terraform apply
+        run: terraform -chdir="$TF_DIR" apply -auto-approve -var-file=terraform.tfvars
+
+      # Migrations run out-of-band, before traffic depends on the new schema.
+      # The DB is private, so provide MIGRATION_DATABASE_URL via an in-VPC path
+      # (bastion/tunnel/self-hosted runner). Skipped with a notice if absent.
+      - name: Run database migrations
+        env:
+          DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::warning::MIGRATION_DATABASE_URL not set — skipping migrations. See docs/operations."
+          else
+            pnpm --filter @app/api db:migrate
+          fi
+
+      # Post-deploy smoke test: run the generated .http collection against the
+      # deployed stage. Best-effort — needs a token (API_SMOKE_TOKEN) + api key.
+      - name: Smoke test (httpyac)
+        if: ${{ env.ENV != 'prod' }}
+        env:
+          SMOKE_TOKEN: ${{ secrets.API_SMOKE_TOKEN }}
+        run: |
+          if [ -z "$SMOKE_TOKEN" ]; then
+            echo "::warning::API_SMOKE_TOKEN not set — skipping smoke test."
+          else
+            URL=$(terraform -chdir="$TF_DIR" output -raw api_invoke_url)
+            httpyac send collections/health.http --all --var baseUrl="$URL"
+          fi

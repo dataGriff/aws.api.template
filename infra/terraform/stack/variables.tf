@@ -81,6 +81,11 @@ variable "alarm_email" {
   type    = string
   default = null
 }
+variable "monthly_budget_usd" {
+  type        = number
+  default     = null
+  description = "If set (with alarm_email), creates a monthly cost budget alarm"
+}
 
 # --- Build artifacts ---------------------------------------------------------
 variable "api_dist_dir" {

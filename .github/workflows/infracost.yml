@@ -1,0 +1,30 @@
+name: Infracost
+
+on:
+  pull_request:
+    paths:
+      - "infra/terraform/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  infracost:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: infracost/actions/setup@v3
+        with:
+          api-key: ${{ secrets.INFRACOST_API_KEY }}
+      - name: Cost breakdown (dev env)
+        run: |
+          infracost breakdown --path infra/terraform/envs/dev \
+            --format json --out-file /tmp/infracost.json
+      - name: Post PR comment
+        run: |
+          infracost comment github --path /tmp/infracost.json \
+            --repo "$GITHUB_REPOSITORY" \
+            --pull-request "${{ github.event.pull_request.number }}" \
+            --github-token "${{ secrets.GITHUB_TOKEN }}" \
+            --behavior update
