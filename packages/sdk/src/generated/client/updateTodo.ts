@@ -4,7 +4,7 @@
 */
 
 import fetch from "@kubb/plugin-client/clients/fetch";
-import type { UpdateTodoMutationRequest, UpdateTodoMutationResponse, UpdateTodoPathParams, UpdateTodo400, UpdateTodo401, UpdateTodo404, UpdateTodo422, UpdateTodo500 } from "../types/UpdateTodo.ts";
+import type { UpdateTodoMutationRequest, UpdateTodoMutationResponse, UpdateTodoPathParams, UpdateTodo400, UpdateTodo401, UpdateTodo403, UpdateTodo404, UpdateTodo413, UpdateTodo422, UpdateTodo429, UpdateTodo500 } from "../types/UpdateTodo.ts";
 import type { RequestConfig, ResponseErrorConfig } from "@kubb/plugin-client/clients/fetch";
 
 function getUpdateTodoUrl(todo_id: UpdateTodoPathParams["todo_id"]) {
@@ -21,6 +21,6 @@ export async function updateTodo(todo_id: UpdateTodoPathParams["todo_id"], data?
   
   const requestData = data  
   
-  const res = await request<UpdateTodoMutationResponse, ResponseErrorConfig<UpdateTodo400 | UpdateTodo401 | UpdateTodo404 | UpdateTodo422 | UpdateTodo500>, UpdateTodoMutationRequest>({ method : "PATCH", url : getUpdateTodoUrl(todo_id).url.toString(), data : requestData, ... requestConfig })  
+  const res = await request<UpdateTodoMutationResponse, ResponseErrorConfig<UpdateTodo400 | UpdateTodo401 | UpdateTodo403 | UpdateTodo404 | UpdateTodo413 | UpdateTodo422 | UpdateTodo429 | UpdateTodo500>, UpdateTodoMutationRequest>({ method : "PATCH", url : getUpdateTodoUrl(todo_id).url.toString(), data : requestData, ... requestConfig })  
   return res.data
 }

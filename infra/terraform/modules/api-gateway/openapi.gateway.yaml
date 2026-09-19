@@ -52,7 +52,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/health_status"
-      x-amazon-apigateway-integration: &a1
+      x-amazon-apigateway-integration:
         type: aws_proxy
         httpMethod: POST
         uri: ${lambda_invoke_arn}
@@ -82,7 +82,7 @@ paths:
             statusCode: "204"
             responseParameters:
               method.response.header.Access-Control-Allow-Origin: "'${cors_origin}'"
-              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PATCH,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Methods: "'OPTIONS,GET'"
               method.response.header.Access-Control-Allow-Headers: "'authorization,content-type,x-api-key,idempotency-key'"
   /todos:
     get:
@@ -108,11 +108,17 @@ paths:
           $ref: "#/components/responses/bad_request"
         "401":
           $ref: "#/components/responses/unauthorized"
+        "403":
+          $ref: "#/components/responses/forbidden"
         "429":
           $ref: "#/components/responses/too_many_requests"
         "500":
           $ref: "#/components/responses/internal_error"
-      x-amazon-apigateway-integration: *a1
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: ${lambda_invoke_arn}
+        passthroughBehavior: when_no_match
     post:
       operationId: create_todo
       summary: Create a todo
@@ -145,15 +151,23 @@ paths:
           $ref: "#/components/responses/bad_request"
         "401":
           $ref: "#/components/responses/unauthorized"
+        "403":
+          $ref: "#/components/responses/forbidden"
         "409":
           $ref: "#/components/responses/conflict"
+        "413":
+          $ref: "#/components/responses/payload_too_large"
         "422":
           $ref: "#/components/responses/unprocessable_entity"
         "429":
           $ref: "#/components/responses/too_many_requests"
         "500":
           $ref: "#/components/responses/internal_error"
-      x-amazon-apigateway-integration: *a1
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: ${lambda_invoke_arn}
+        passthroughBehavior: when_no_match
     options:
       summary: CORS preflight
       security: []
@@ -179,7 +193,7 @@ paths:
             statusCode: "204"
             responseParameters:
               method.response.header.Access-Control-Allow-Origin: "'${cors_origin}'"
-              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PATCH,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Methods: "'OPTIONS,GET,POST'"
               method.response.header.Access-Control-Allow-Headers: "'authorization,content-type,x-api-key,idempotency-key'"
   /todos/{todo_id}:
     parameters:
@@ -196,13 +210,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/todo"
+        "400":
+          $ref: "#/components/responses/bad_request"
         "401":
           $ref: "#/components/responses/unauthorized"
+        "403":
+          $ref: "#/components/responses/forbidden"
         "404":
           $ref: "#/components/responses/not_found"
+        "429":
+          $ref: "#/components/responses/too_many_requests"
         "500":
           $ref: "#/components/responses/internal_error"
-      x-amazon-apigateway-integration: *a1
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: ${lambda_invoke_arn}
+        passthroughBehavior: when_no_match
     patch:
       operationId: update_todo
       summary: Update a todo
@@ -225,13 +249,23 @@ paths:
           $ref: "#/components/responses/bad_request"
         "401":
           $ref: "#/components/responses/unauthorized"
+        "403":
+          $ref: "#/components/responses/forbidden"
         "404":
           $ref: "#/components/responses/not_found"
+        "413":
+          $ref: "#/components/responses/payload_too_large"
         "422":
           $ref: "#/components/responses/unprocessable_entity"
+        "429":
+          $ref: "#/components/responses/too_many_requests"
         "500":
           $ref: "#/components/responses/internal_error"
-      x-amazon-apigateway-integration: *a1
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: ${lambda_invoke_arn}
+        passthroughBehavior: when_no_match
     delete:
       operationId: delete_todo
       summary: Delete a todo
@@ -240,13 +274,23 @@ paths:
       responses:
         "204":
           description: Deleted
+        "400":
+          $ref: "#/components/responses/bad_request"
         "401":
           $ref: "#/components/responses/unauthorized"
+        "403":
+          $ref: "#/components/responses/forbidden"
         "404":
           $ref: "#/components/responses/not_found"
+        "429":
+          $ref: "#/components/responses/too_many_requests"
         "500":
           $ref: "#/components/responses/internal_error"
-      x-amazon-apigateway-integration: *a1
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: ${lambda_invoke_arn}
+        passthroughBehavior: when_no_match
     options:
       summary: CORS preflight
       security: []
@@ -272,7 +316,7 @@ paths:
             statusCode: "204"
             responseParameters:
               method.response.header.Access-Control-Allow-Origin: "'${cors_origin}'"
-              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PATCH,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Methods: "'OPTIONS,GET,PATCH,DELETE'"
               method.response.header.Access-Control-Allow-Headers: "'authorization,content-type,x-api-key,idempotency-key'"
 components:
   securitySchemes:
@@ -328,7 +372,12 @@ components:
       name: idempotency-key
       in: header
       required: false
-      description: Client-supplied key to make creation idempotent
+      description: >
+        Client-supplied key to make creation idempotent. Replaying the same key
+        with the same body
+
+        returns the original result; reusing it with a different body is
+        rejected with 409.
       schema:
         type: string
         minLength: 8
@@ -496,6 +545,19 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/problem"
+    forbidden:
+      description: Missing or invalid API key, or the key's usage plan does not cover
+        this API
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/problem"
+    payload_too_large:
+      description: Request body exceeds the gateway limit
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/problem"
     not_found:
       description: Resource not found
       content:
@@ -531,3 +593,166 @@ x-amazon-apigateway-request-validators:
     validateRequestBody: true
     validateRequestParameters: true
 x-amazon-apigateway-request-validator: all
+x-amazon-apigateway-gateway-responses:
+  DEFAULT_4XX:
+    statusCode: "400"
+    responseParameters:
+      gatewayresponse.header.Access-Control-Allow-Origin: "'${cors_origin}'"
+      gatewayresponse.header.Access-Control-Allow-Headers: "'authorization,content-type,x-api-key,idempotency-key'"
+      gatewayresponse.header.x-request-id: context.requestId
+    responseTemplates:
+      application/json: '{"type":"about:blank","title":"Bad
+        Request","status":400,"detail":"$context.error.messageString","request_id":"$context.requestId"}'
+      application/problem+json: '{"type":"about:blank","title":"Bad
+        Request","status":400,"detail":"$context.error.messageString","request_id":"$context.requestId"}'
+  DEFAULT_5XX:
+    statusCode: "500"
+    responseParameters:
+      gatewayresponse.header.Access-Control-Allow-Origin: "'${cors_origin}'"
+      gatewayresponse.header.Access-Control-Allow-Headers: "'authorization,content-type,x-api-key,idempotency-key'"
+      gatewayresponse.header.x-request-id: context.requestId
+    responseTemplates:
+      application/json: '{"type":"about:blank","title":"Internal Server
+        Error","status":500,"detail":"An unexpected error
+        occurred","request_id":"$context.requestId"}'
+      application/problem+json: '{"type":"about:blank","title":"Internal Server
+        Error","status":500,"detail":"An unexpected error
+        occurred","request_id":"$context.requestId"}'
+  BAD_REQUEST_BODY:
+    statusCode: "400"
+    responseParameters:
+      gatewayresponse.header.Access-Control-Allow-Origin: "'${cors_origin}'"
+      gatewayresponse.header.Access-Control-Allow-Headers: "'authorization,content-type,x-api-key,idempotency-key'"
+      gatewayresponse.header.x-request-id: context.requestId
+    responseTemplates:
+      application/json: '{"type":"about:blank","title":"Bad
+        Request","status":400,"detail":"$context.error.validationErrorString","request_id":"$context.requestId"}'
+      application/problem+json: '{"type":"about:blank","title":"Bad
+        Request","status":400,"detail":"$context.error.validationErrorString","request_id":"$context.requestId"}'
+  BAD_REQUEST_PARAMETERS:
+    statusCode: "400"
+    responseParameters:
+      gatewayresponse.header.Access-Control-Allow-Origin: "'${cors_origin}'"
+      gatewayresponse.header.Access-Control-Allow-Headers: "'authorization,content-type,x-api-key,idempotency-key'"
+      gatewayresponse.header.x-request-id: context.requestId
+    responseTemplates:
+      application/json: '{"type":"about:blank","title":"Bad
+        Request","status":400,"detail":"$context.error.validationErrorString","request_id":"$context.requestId"}'
+      application/problem+json: '{"type":"about:blank","title":"Bad
+        Request","status":400,"detail":"$context.error.validationErrorString","request_id":"$context.requestId"}'
+  UNAUTHORIZED:
+    statusCode: "401"
+    responseParameters:
+      gatewayresponse.header.Access-Control-Allow-Origin: "'${cors_origin}'"
+      gatewayresponse.header.Access-Control-Allow-Headers: "'authorization,content-type,x-api-key,idempotency-key'"
+      gatewayresponse.header.x-request-id: context.requestId
+    responseTemplates:
+      application/json: '{"type":"about:blank","title":"Unauthorized","status":401,"detail":"Missing
+        or invalid credentials","request_id":"$context.requestId"}'
+      application/problem+json: '{"type":"about:blank","title":"Unauthorized","status":401,"detail":"Missing
+        or invalid credentials","request_id":"$context.requestId"}'
+  EXPIRED_TOKEN:
+    statusCode: "401"
+    responseParameters:
+      gatewayresponse.header.Access-Control-Allow-Origin: "'${cors_origin}'"
+      gatewayresponse.header.Access-Control-Allow-Headers: "'authorization,content-type,x-api-key,idempotency-key'"
+      gatewayresponse.header.x-request-id: context.requestId
+    responseTemplates:
+      application/json: '{"type":"about:blank","title":"Unauthorized","status":401,"detail":"Token
+        has expired","request_id":"$context.requestId"}'
+      application/problem+json: '{"type":"about:blank","title":"Unauthorized","status":401,"detail":"Token
+        has expired","request_id":"$context.requestId"}'
+  INVALID_SIGNATURE:
+    statusCode: "401"
+    responseParameters:
+      gatewayresponse.header.Access-Control-Allow-Origin: "'${cors_origin}'"
+      gatewayresponse.header.Access-Control-Allow-Headers: "'authorization,content-type,x-api-key,idempotency-key'"
+      gatewayresponse.header.x-request-id: context.requestId
+    responseTemplates:
+      application/json: '{"type":"about:blank","title":"Unauthorized","status":401,"detail":"Token
+        signature is invalid","request_id":"$context.requestId"}'
+      application/problem+json: '{"type":"about:blank","title":"Unauthorized","status":401,"detail":"Token
+        signature is invalid","request_id":"$context.requestId"}'
+  MISSING_AUTHENTICATION_TOKEN:
+    statusCode: "401"
+    responseParameters:
+      gatewayresponse.header.Access-Control-Allow-Origin: "'${cors_origin}'"
+      gatewayresponse.header.Access-Control-Allow-Headers: "'authorization,content-type,x-api-key,idempotency-key'"
+      gatewayresponse.header.x-request-id: context.requestId
+    responseTemplates:
+      application/json: '{"type":"about:blank","title":"Unauthorized","status":401,"detail":"Missing
+        or invalid credentials","request_id":"$context.requestId"}'
+      application/problem+json: '{"type":"about:blank","title":"Unauthorized","status":401,"detail":"Missing
+        or invalid credentials","request_id":"$context.requestId"}'
+  ACCESS_DENIED:
+    statusCode: "403"
+    responseParameters:
+      gatewayresponse.header.Access-Control-Allow-Origin: "'${cors_origin}'"
+      gatewayresponse.header.Access-Control-Allow-Headers: "'authorization,content-type,x-api-key,idempotency-key'"
+      gatewayresponse.header.x-request-id: context.requestId
+    responseTemplates:
+      application/json: '{"type":"about:blank","title":"Forbidden","status":403,"detail":"Access
+        denied","request_id":"$context.requestId"}'
+      application/problem+json: '{"type":"about:blank","title":"Forbidden","status":403,"detail":"Access
+        denied","request_id":"$context.requestId"}'
+  INVALID_API_KEY:
+    statusCode: "403"
+    responseParameters:
+      gatewayresponse.header.Access-Control-Allow-Origin: "'${cors_origin}'"
+      gatewayresponse.header.Access-Control-Allow-Headers: "'authorization,content-type,x-api-key,idempotency-key'"
+      gatewayresponse.header.x-request-id: context.requestId
+    responseTemplates:
+      application/json: '{"type":"about:blank","title":"Forbidden","status":403,"detail":"Missing
+        or invalid API key","request_id":"$context.requestId"}'
+      application/problem+json: '{"type":"about:blank","title":"Forbidden","status":403,"detail":"Missing
+        or invalid API key","request_id":"$context.requestId"}'
+  WAF_FILTERED:
+    statusCode: "403"
+    responseParameters:
+      gatewayresponse.header.Access-Control-Allow-Origin: "'${cors_origin}'"
+      gatewayresponse.header.Access-Control-Allow-Headers: "'authorization,content-type,x-api-key,idempotency-key'"
+      gatewayresponse.header.x-request-id: context.requestId
+    responseTemplates:
+      application/json: '{"type":"about:blank","title":"Forbidden","status":403,"detail":"Request
+        blocked","request_id":"$context.requestId"}'
+      application/problem+json: '{"type":"about:blank","title":"Forbidden","status":403,"detail":"Request
+        blocked","request_id":"$context.requestId"}'
+  REQUEST_TOO_LARGE:
+    statusCode: "413"
+    responseParameters:
+      gatewayresponse.header.Access-Control-Allow-Origin: "'${cors_origin}'"
+      gatewayresponse.header.Access-Control-Allow-Headers: "'authorization,content-type,x-api-key,idempotency-key'"
+      gatewayresponse.header.x-request-id: context.requestId
+    responseTemplates:
+      application/json: '{"type":"about:blank","title":"Payload Too
+        Large","status":413,"detail":"Request body exceeds the
+        limit","request_id":"$context.requestId"}'
+      application/problem+json: '{"type":"about:blank","title":"Payload Too
+        Large","status":413,"detail":"Request body exceeds the
+        limit","request_id":"$context.requestId"}'
+  THROTTLED:
+    statusCode: "429"
+    responseParameters:
+      gatewayresponse.header.Access-Control-Allow-Origin: "'${cors_origin}'"
+      gatewayresponse.header.Access-Control-Allow-Headers: "'authorization,content-type,x-api-key,idempotency-key'"
+      gatewayresponse.header.x-request-id: context.requestId
+    responseTemplates:
+      application/json: '{"type":"about:blank","title":"Too Many
+        Requests","status":429,"detail":"Rate limit or quota
+        exceeded","request_id":"$context.requestId"}'
+      application/problem+json: '{"type":"about:blank","title":"Too Many
+        Requests","status":429,"detail":"Rate limit or quota
+        exceeded","request_id":"$context.requestId"}'
+  QUOTA_EXCEEDED:
+    statusCode: "429"
+    responseParameters:
+      gatewayresponse.header.Access-Control-Allow-Origin: "'${cors_origin}'"
+      gatewayresponse.header.Access-Control-Allow-Headers: "'authorization,content-type,x-api-key,idempotency-key'"
+      gatewayresponse.header.x-request-id: context.requestId
+    responseTemplates:
+      application/json: '{"type":"about:blank","title":"Too Many
+        Requests","status":429,"detail":"Rate limit or quota
+        exceeded","request_id":"$context.requestId"}'
+      application/problem+json: '{"type":"about:blank","title":"Too Many
+        Requests","status":429,"detail":"Rate limit or quota
+        exceeded","request_id":"$context.requestId"}'

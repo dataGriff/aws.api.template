@@ -1,9 +1,15 @@
 import { readFileSync } from "node:fs";
-import { Pool, type PoolConfig } from "pg";
+import pg, { Pool, type PoolConfig } from "pg";
 import { Signer } from "@aws-sdk/rds-signer";
 import { getSecret } from "@aws-lambda-powertools/parameters/secrets";
 import { getConfig } from "../config.js";
 import { logger } from "../observability.js";
+
+// Return `date` columns (OID 1082) as the raw "YYYY-MM-DD" string. node-postgres
+// would otherwise build a JS Date at *local* midnight, which shifts the day on
+// any process whose TZ is not UTC (developer machines, some CI runners).
+const DATE_OID = 1082;
+pg.types.setTypeParser(DATE_OID, (value: string) => value);
 
 // A single Pool is cached at module scope and reused across warm invocations.
 // Keep it small so RDS Proxy can multiplex effectively, and never hold session
@@ -23,6 +29,16 @@ async function iamToken(host: string, port: number, user: string, region: string
   tokenCache = { value, expiresAt: now + TOKEN_TTL_MS };
   return value;
 }
+
+type DbSecret = { password: string; username?: string };
+
+// Resolved per new connection (not once per pool) so a rotated secret is picked
+// up without a cold start. Powertools caches the value for `maxAge` seconds.
+const secretPassword = (arn: string) => async (): Promise<string> => {
+  const secret = await getSecret<DbSecret>(arn, { transform: "json", maxAge: 300 });
+  if (!secret?.password) throw new Error("DB secret has no password field");
+  return secret.password;
+};
 
 async function buildConfig(): Promise<PoolConfig> {
   const cfg = getConfig();
@@ -60,12 +76,9 @@ async function buildConfig(): Promise<PoolConfig> {
     // password is resolved per new connection so tokens stay fresh.
     base.password = () => iamToken(host, cfg.DB_PORT, cfg.DB_USER, cfg.AWS_REGION);
   } else if (cfg.DB_SECRET_ARN) {
-    const secret = await getSecret<{ password: string; username?: string }>(cfg.DB_SECRET_ARN, {
-      transform: "json",
-      maxAge: 300,
-    });
-    base.password = secret?.password;
+    const secret = await getSecret<DbSecret>(cfg.DB_SECRET_ARN, { transform: "json", maxAge: 300 });
     if (secret?.username) base.user = secret.username;
+    base.password = secretPassword(cfg.DB_SECRET_ARN);
   }
 
   return base;

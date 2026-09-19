@@ -9,17 +9,22 @@ on:
 
 permissions:
   contents: read
-  security-events: write
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   scan:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0 # gitleaks needs history
+          persist-credentials: false
 
-      - uses: jdx/mise-action@v2
+      - uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2.4.4
         with:
           install: true
           cache: true
@@ -30,7 +35,7 @@ jobs:
       - name: Secret scan (gitleaks)
         run: task security:secrets
 
-      - name: IaC scan (tfsec + checkov)
+      - name: IaC scan (trivy config + checkov)
         run: task tf:scan
 
       - name: Static analysis (semgrep)
@@ -43,7 +48,7 @@ jobs:
         run: task sbom
 
       - name: Upload SBOM
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: sbom
           path: sbom.cdx.json

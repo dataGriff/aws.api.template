@@ -15,6 +15,16 @@ module "stack" {
   hosted_zone_id           = var.hosted_zone_id
   alarm_email              = var.alarm_email
 
+  # Capacity / hardening
+  db_instance_class             = var.db_instance_class
+  db_multi_az                   = var.db_multi_az
+  db_backup_retention_days      = var.db_backup_retention_days
+  lambda_reserved_concurrency   = var.lambda_reserved_concurrency
+  cors_origin                   = var.cors_origin
+  callback_urls                 = var.callback_urls
+  logout_urls                   = var.logout_urls
+  manage_apigw_account_settings = var.manage_apigw_account_settings
+
   # prod: no test client, protect data.
   enable_test_client  = false
   deletion_protection = true

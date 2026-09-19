@@ -17,16 +17,15 @@ authorization without domain noise. Swap it for your own contract with the **ado
 # 1. Install every pinned tool (node, pnpm, terraform, task, scanners, ...)
 mise install
 
-# 2. Install dependencies and git hooks
+# 2. Install dependencies (also installs the git hooks via `prepare`)
 pnpm install
-lefthook install
 
 # 3. Bring up the local stack (Postgres + cognito-local + Prism mock) and migrate
 task up
 
 # 4. Run the API locally and mint a token
 task serve            # in one terminal
-task token            # writes a JWT into the .http environment
+task token            # writes a local stub JWT into the git-ignored .http private env
 
 # 5. Fire requests from collections/*.http (VS Code REST Client / JetBrains),
 #    or run the full gate exactly as CI does:
@@ -35,15 +34,15 @@ task ci
 
 ## What you get
 
-| Area               | Highlights                                                                                                                                                     |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Contract-first** | `api/openapi.yaml` → generated zod+types, consumer SDK, Prism mock, `.http` collection, Redocly API reference. Drift is CI-gated.                              |
-| **Secure auth**    | Cognito user pool + app clients, **pre-token-generation trigger** adds custom claims, gateway Cognito authorizer, API keys + usage plans, WAF (opt-in).        |
-| **Data**           | Postgres via RDS Proxy (IAM auth, pooled), parameterisable Aurora Serverless v2 ↔ RDS. Forward-only migrations run out-of-band.                                |
-| **Infra**          | Terraform modules + `dev/staging/prod` envs, OIDC (no long-lived keys), S3+DynamoDB state. Opt-in flags: WAF, RDS Proxy, egress/ingress static IP, custom DNS. |
-| **Testing**        | vitest unit + integration (testcontainers), cucumber-js BDD, Prism contract, Schemathesis fuzz.                                                                |
-| **DX**             | mise + Taskfile, lefthook hooks (`task check` / `task ci`), one CI that runs identically locally.                                                              |
-| **Ops**            | CloudWatch dashboard + alarms, X-Ray tracing, structured logs, SBOM, Infracost, semantic-release.                                                              |
+| Area               | Highlights                                                                                                                                                                                          |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Contract-first** | `api/openapi.yaml` → generated zod+types, consumer SDK, Prism mock, `.http` collection, Redocly API reference. Drift is CI-gated.                                                                   |
+| **Secure auth**    | Cognito user pool + app clients, **pre-token-generation trigger** adds custom claims, gateway Cognito authorizer, API keys + usage plans, WAF (opt-in).                                             |
+| **Data**           | Postgres via RDS Proxy (IAM auth, pooled), parameterisable Aurora Serverless v2 ↔ RDS. Forward-only migrations run out-of-band.                                                                     |
+| **Infra**          | Terraform modules + `dev/staging/prod` envs, GitHub OIDC deploy roles (no long-lived keys), S3+DynamoDB state, prod guardrails. Opt-in flags: WAF, RDS Proxy, egress/ingress static IP, custom DNS. |
+| **Testing**        | vitest unit + integration (testcontainers), cucumber-js BDD, contract conformance against the generated schemas, Schemathesis fuzz.                                                                 |
+| **DX**             | mise + Taskfile, lefthook hooks (`task check` / `task ci`), one CI that runs identically locally.                                                                                                   |
+| **Ops**            | CloudWatch dashboard + alarms, X-Ray tracing, structured logs, SBOM, Infracost, semantic-release.                                                                                                   |
 
 ## Documentation
 

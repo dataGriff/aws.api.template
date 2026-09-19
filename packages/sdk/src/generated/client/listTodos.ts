@@ -4,7 +4,7 @@
 */
 
 import fetch from "@kubb/plugin-client/clients/fetch";
-import type { ListTodosQueryResponse, ListTodosQueryParams, ListTodos400, ListTodos401, ListTodos429, ListTodos500 } from "../types/ListTodos.ts";
+import type { ListTodosQueryResponse, ListTodosQueryParams, ListTodos400, ListTodos401, ListTodos403, ListTodos429, ListTodos500 } from "../types/ListTodos.ts";
 import type { RequestConfig, ResponseErrorConfig } from "@kubb/plugin-client/clients/fetch";
 
 function getListTodosUrl() {
@@ -19,6 +19,6 @@ function getListTodosUrl() {
 export async function listTodos(params?: ListTodosQueryParams, config: Partial<RequestConfig> & { client?: typeof fetch } = {}) {
   const { client: request = fetch, ...requestConfig } = config  
   
-  const res = await request<ListTodosQueryResponse, ResponseErrorConfig<ListTodos400 | ListTodos401 | ListTodos429 | ListTodos500>, unknown>({ method : "GET", url : getListTodosUrl().url.toString(), params, ... requestConfig })  
+  const res = await request<ListTodosQueryResponse, ResponseErrorConfig<ListTodos400 | ListTodos401 | ListTodos403 | ListTodos429 | ListTodos500>, unknown>({ method : "GET", url : getListTodosUrl().url.toString(), params, ... requestConfig })  
   return res.data
 }

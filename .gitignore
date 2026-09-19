@@ -13,17 +13,23 @@ coverage/
 *.tfstate
 *.tfstate.*
 *.tfplan
+tfplan
 crash.log
+# Lambda zips produced by archive_file at plan time
+**/.build/
 
 # Secrets / local env
 .env
 .env.*
 !.env.example
 *.pem
+# Tokens for the .http collection (written by `task token`); never commit
+collections/http-client.private.env.json
 
 # Artifacts
 sbom.cdx.json
 infracost.json
+test-results/
 
 # cognito-local runtime state (keep config.json)
 local/cognito-local/*

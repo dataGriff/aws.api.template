@@ -2,12 +2,12 @@
 # Local dev, git hooks, and GitHub Actions all run `mise install` then invoke
 # Taskfile targets — guaranteeing identical tooling everywhere.
 [tools]
-node = "22"
-pnpm = "9"
-python = "3.12"
-terraform = "1.9"
-task = "3"
-# Pinned for reproducibility (local == hooks == CI). Bumped via Renovate.
+# Everything is pinned exactly for reproducibility (local == hooks == CI). Bumped via Renovate.
+node = "22.11.0"
+pnpm = "9.12.3" # keep in sync with package.json "packageManager"
+python = "3.12.7"
+terraform = "1.9.8"
+task = "3.40.1"
 tflint = "0.64.0"
 trivy = "0.74.0"
 gitleaks = "8.30.1"

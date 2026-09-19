@@ -7,3 +7,7 @@ variable "tags" {
   type    = map(string)
   default = {}
 }
+variable "noncurrent_version_retention_days" {
+  type    = number
+  default = 90
+}

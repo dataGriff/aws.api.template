@@ -1,10 +1,18 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended", ":dependencyDashboard", "group:allNonMajor"],
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    "group:allNonMajor",
+    "helpers:pinGitHubActionDigests"
+  ],
   "labels": ["dependencies"],
+  "minimumReleaseAge": "7 days",
   "packageRules": [
     {
+      "description": "Auto-merge dev tooling only. Runtime dependencies of the Lambda always get a human review: main auto-deploys, so an auto-merged compromised package would ship itself.",
       "matchManagers": ["npm"],
+      "matchDepTypes": ["devDependencies"],
       "matchUpdateTypes": ["minor", "patch"],
       "automerge": true
     },

@@ -7,7 +7,7 @@ await build({
   platform: "node",
   target: "node22",
   format: "cjs",
-  sourcemap: true,
+  sourcemap: "inline",
   minify: true,
   external: ["@aws-sdk/*"],
   logLevel: "info",

@@ -32,6 +32,8 @@ export function buildEvent(opts: EventOptions): APIGatewayProxyEvent {
     stageVariables: null,
     requestContext: {
       requestId: "test-request-id",
+      // API Gateway includes the stage prefix in requestContext.path.
+      path: `/v1${opts.path ?? opts.resource}`,
       authorizer: claims ? { claims } : null,
     } as APIGatewayProxyEvent["requestContext"],
   } as APIGatewayProxyEvent;

@@ -1,5 +1,7 @@
 terraform {
-  required_version = ">= 1.6"
+  # 1.9+: variable validation rules may reference other variables (used for the
+  # prod guardrails in variables.tf).
+  required_version = ">= 1.9"
   required_providers {
     aws     = { source = "hashicorp/aws", version = ">= 5.60" }
     random  = { source = "hashicorp/random", version = ">= 3.6" }
@@ -81,11 +83,23 @@ resource "aws_security_group" "proxy" {
   tags = local.tags
 }
 
+# One customer-managed key for the data tier: DB storage and the credential
+# secret (rather than the AWS-managed aws/secretsmanager key).
+resource "aws_kms_key" "data" {
+  description             = "${local.name} data encryption (database + credentials)"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+  tags                    = local.tags
+}
+
 module "secrets" {
-  source   = "../modules/secrets"
-  name     = local.name
-  username = var.db_username
-  tags     = local.tags
+  source     = "../modules/secrets"
+  name       = local.name
+  username   = var.db_username
+  kms_key_id = aws_kms_key.data.arn
+  # Ephemeral envs can be torn down and rebuilt inside the recovery window.
+  recovery_window_in_days = var.deletion_protection ? 7 : 0
+  tags                    = local.tags
 }
 
 module "database" {
@@ -98,7 +112,12 @@ module "database" {
   database_name              = var.db_name
   username                   = var.db_username
   password                   = module.secrets.password
+  kms_key_arn                = aws_kms_key.data.arn
+  instance_class             = var.db_instance_class
+  multi_az                   = var.db_multi_az
+  backup_retention_days      = var.db_backup_retention_days
   deletion_protection        = var.deletion_protection
+  apply_immediately          = !var.deletion_protection
   tags                       = local.tags
 }
 
@@ -137,15 +156,17 @@ resource "aws_dynamodb_table" "idempotency" {
 }
 
 module "cognito" {
-  source             = "../modules/cognito"
-  name               = local.name
-  region             = var.region
-  domain_suffix      = random_string.suffix.result
-  pretoken_dist_dir  = var.pretoken_dist_dir
-  enable_test_client = var.enable_test_client
-  callback_urls      = var.callback_urls
-  logout_urls        = var.logout_urls
-  tags               = local.tags
+  source              = "../modules/cognito"
+  name                = local.name
+  region              = var.region
+  domain_suffix       = random_string.suffix.result
+  pretoken_dist_dir   = var.pretoken_dist_dir
+  enable_test_client  = var.enable_test_client
+  callback_urls       = var.callback_urls
+  logout_urls         = var.logout_urls
+  deletion_protection = var.deletion_protection
+  log_retention_days  = var.log_retention_days
+  tags                = local.tags
 }
 
 locals {
@@ -157,10 +178,12 @@ module "lambda_api" {
   name                   = local.name
   env                    = var.env
   region                 = var.region
-  vpc_id                 = module.network.vpc_id
   subnet_ids             = module.network.private_subnet_ids
   security_group_ids     = [aws_security_group.lambda.id]
   dist_dir               = var.api_dist_dir
+  memory_size            = var.lambda_memory_size
+  reserved_concurrency   = var.lambda_reserved_concurrency
+  log_retention_days     = var.log_retention_days
   db_host                = local.db_host
   db_name                = var.db_name
   db_user                = var.db_username
@@ -172,14 +195,20 @@ module "lambda_api" {
 }
 
 module "api_gateway" {
-  source                = "../modules/api-gateway"
-  name                  = local.name
-  stage_name            = var.stage_name
-  lambda_invoke_arn     = module.lambda_api.invoke_arn
-  lambda_function_name  = module.lambda_api.function_name
-  cognito_user_pool_arn = module.cognito.user_pool_arn
-  cors_origin           = var.cors_origin
-  tags                  = local.tags
+  source                       = "../modules/api-gateway"
+  name                         = local.name
+  stage_name                   = var.stage_name
+  lambda_invoke_arn            = module.lambda_api.invoke_arn
+  lambda_function_name         = module.lambda_api.function_name
+  cognito_user_pool_arn        = module.cognito.user_pool_arn
+  cors_origin                  = var.cors_origin
+  throttle_rate                = var.api_throttle_rate
+  throttle_burst               = var.api_throttle_burst
+  quota_limit                  = var.api_quota_limit
+  log_retention_days           = var.log_retention_days
+  disable_execute_api_endpoint = var.custom_domain_enabled && var.disable_execute_api_endpoint
+  manage_account_settings      = var.manage_apigw_account_settings
+  tags                         = local.tags
 }
 
 module "waf" {

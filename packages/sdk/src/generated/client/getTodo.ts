@@ -4,7 +4,7 @@
 */
 
 import fetch from "@kubb/plugin-client/clients/fetch";
-import type { GetTodoQueryResponse, GetTodoPathParams, GetTodo401, GetTodo404, GetTodo500 } from "../types/GetTodo.ts";
+import type { GetTodoQueryResponse, GetTodoPathParams, GetTodo400, GetTodo401, GetTodo403, GetTodo404, GetTodo429, GetTodo500 } from "../types/GetTodo.ts";
 import type { RequestConfig, ResponseErrorConfig } from "@kubb/plugin-client/clients/fetch";
 
 function getGetTodoUrl(todo_id: GetTodoPathParams["todo_id"]) {
@@ -19,6 +19,6 @@ function getGetTodoUrl(todo_id: GetTodoPathParams["todo_id"]) {
 export async function getTodo(todo_id: GetTodoPathParams["todo_id"], config: Partial<RequestConfig> & { client?: typeof fetch } = {}) {
   const { client: request = fetch, ...requestConfig } = config  
   
-  const res = await request<GetTodoQueryResponse, ResponseErrorConfig<GetTodo401 | GetTodo404 | GetTodo500>, unknown>({ method : "GET", url : getGetTodoUrl(todo_id).url.toString(), ... requestConfig })  
+  const res = await request<GetTodoQueryResponse, ResponseErrorConfig<GetTodo400 | GetTodo401 | GetTodo403 | GetTodo404 | GetTodo429 | GetTodo500>, unknown>({ method : "GET", url : getGetTodoUrl(todo_id).url.toString(), ... requestConfig })  
   return res.data
 }

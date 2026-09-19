@@ -1,10 +1,12 @@
 #!/usr/bin/env node
-// Mints a JWT for local development and writes it into the .http environment so
-// collections/*.http requests are runnable. Locally the API server uses a stub
-// authorizer that reads (but does not verify) the token, so an unsigned token is
-// sufficient. For a DEPLOYED environment, obtain a real token from Cognito
-// (USER_PASSWORD_AUTH against a test client) instead — see docs/consumer-guide.
-import { readFileSync, writeFileSync } from "node:fs";
+// Mints an UNSIGNED stub JWT for local development and writes it into the
+// git-ignored .http private environment (collections/http-client.private.env.json)
+// so collections/*.http requests are runnable. The local server's stub authorizer
+// reads (but does not verify) the token; nothing else accepts it. It never
+// contacts cognito-local. For a DEPLOYED environment, obtain a real token from
+// Cognito (USER_PASSWORD_AUTH against the test client) and put it in the same
+// private file — never in the tracked http-client.env.json.
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -38,17 +40,22 @@ const token = `${b64({ alg: "none", typ: "JWT" })}.${b64(payload)}.stub`;
 if (args.print) {
   process.stdout.write(token);
 } else {
+  if (env !== "local") {
+    console.error(
+      `Refusing to mint a stub token for '${env}': it is unsigned and only the local stub authorizer accepts it. Obtain a real Cognito token instead (docs/consumer-guide).`,
+    );
+    process.exit(1);
+  }
   const file = join(
     dirname(fileURLToPath(import.meta.url)),
     "..",
     "collections",
-    "http-client.env.json",
+    "http-client.private.env.json",
   );
-  const envs = JSON.parse(readFileSync(file, "utf8"));
-  envs[env] ??= { baseUrl: "http://localhost:3000/v1", apiKey: "local-dev-key" };
-  envs[env].token = token;
+  const envs = existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : {};
+  envs[env] = { ...(envs[env] ?? {}), token };
   writeFileSync(file, JSON.stringify(envs, null, 2) + "\n");
   console.log(
-    `Wrote token for '${env}' (sub=${sub}, tenant=${tenant}) into collections/http-client.env.json`,
+    `Wrote token for '${env}' (sub=${sub}, tenant=${tenant}) into collections/http-client.private.env.json (git-ignored)`,
   );
 }

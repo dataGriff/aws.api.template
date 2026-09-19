@@ -6,12 +6,19 @@ import { createServer, type IncomingMessage } from "node:http";
 // decode the bearer token WITHOUT verifying its signature (a stub authorizer) —
 // this is only for local dev; real auth happens at the gateway.
 process.env.APP_ENV ??= "local";
+if (process.env.APP_ENV !== "local") {
+  throw new Error(
+    `local/server.ts uses an unverified stub authorizer and only runs with APP_ENV=local (got "${process.env.APP_ENV}")`,
+  );
+}
 process.env.DATABASE_URL ??= "postgresql://app:app@localhost:5432/app";
 process.env.POWERTOOLS_SERVICE_NAME ??= "todo-api-local";
 
 const { handler } = await import("../packages/api/src/handler.ts");
 
 const PORT = Number(process.env.PORT ?? 3000);
+// Loopback only: the stub authorizer must never be reachable from the LAN.
+const HOST = process.env.HOST ?? "127.0.0.1";
 const STAGE = "/v1";
 
 // Route templates mirror api/openapi.yaml (and the handler's router).
@@ -45,15 +52,19 @@ function decodeClaims(auth?: string): Record<string, string> | undefined {
 }
 
 const readBody = (req: IncomingMessage): Promise<string> =>
-  new Promise((resolve) => {
+  new Promise((resolve, reject) => {
     let data = "";
     req.on("data", (c) => (data += c));
     req.on("end", () => resolve(data));
+    req.on("error", reject);
   });
+
+const problem = (status: number, title: string) =>
+  JSON.stringify({ type: "about:blank", title, status });
 
 const server = createServer((req, res) => {
   void (async () => {
-    const url = new URL(req.url ?? "/", `http://localhost:${PORT}`);
+    const url = new URL(req.url ?? "/", `http://${HOST}:${PORT}`);
     const path = url.pathname.startsWith(STAGE)
       ? url.pathname.slice(STAGE.length) || "/"
       : url.pathname;
@@ -61,7 +72,7 @@ const server = createServer((req, res) => {
 
     if (!route) {
       res.writeHead(404, { "content-type": "application/problem+json" });
-      res.end(JSON.stringify({ title: "Not Found", status: 404 }));
+      res.end(problem(404, "Not Found"));
       return;
     }
 
@@ -80,7 +91,12 @@ const server = createServer((req, res) => {
       body: body || null,
       isBase64Encoded: false,
       stageVariables: null,
-      requestContext: { requestId: `local-${Date.now()}`, authorizer: claims ? { claims } : null },
+      requestContext: {
+        requestId: `local-${Date.now()}`,
+        // As at API Gateway, requestContext.path includes the stage prefix.
+        path: url.pathname,
+        authorizer: claims ? { claims } : null,
+      },
     };
 
     const result = (await handler(event as never, { awsRequestId: "local" } as never)) as {
@@ -90,9 +106,16 @@ const server = createServer((req, res) => {
     };
     res.writeHead(result.statusCode, result.headers ?? {});
     res.end(result.body ?? "");
-  })();
+  })().catch((err: unknown) => {
+    // The handler's error mapper normally produces a 500 itself; this catches
+    // failures outside it (bad request stream, malformed result) so a single
+    // request can never take the dev server down.
+    console.error("local server error:", err);
+    if (!res.headersSent) res.writeHead(500, { "content-type": "application/problem+json" });
+    res.end(problem(500, "Internal Server Error"));
+  });
 });
 
-server.listen(PORT, () => {
-  console.log(`Local API on http://localhost:${PORT}${STAGE}  (Prism mock on :4010)`);
+server.listen(PORT, HOST, () => {
+  console.log(`Local API on http://${HOST}:${PORT}${STAGE}  (Prism mock on :4010)`);
 });

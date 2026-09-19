@@ -9,7 +9,7 @@ import type { TodoCreate } from "./TodoCreate.ts";
 
 export type CreateTodoHeaderParams = {
     /**
-     * @description Client-supplied key to make creation idempotent
+     * @description Client-supplied key to make creation idempotent. Replaying the same key with the same body\nreturns the original result; reusing it with a different body is rejected with 409.\n
      * @minLength 8
      * @maxLength 128
      * @type string | undefined
@@ -33,9 +33,19 @@ export type CreateTodo400 = Problem;
 export type CreateTodo401 = Problem;
 
 /**
+ * @description Missing or invalid API key, or the key\'s usage plan does not cover this API
+*/
+export type CreateTodo403 = Problem;
+
+/**
  * @description Idempotency conflict
 */
 export type CreateTodo409 = Problem;
+
+/**
+ * @description Request body exceeds the gateway limit
+*/
+export type CreateTodo413 = Problem;
 
 /**
  * @description Semantic validation failed
@@ -60,5 +70,5 @@ export type CreateTodoMutation = {
     Response: CreateTodo201;
     Request: CreateTodoMutationRequest;
     HeaderParams: CreateTodoHeaderParams;
-    Errors: CreateTodo400 | CreateTodo401 | CreateTodo409 | CreateTodo422 | CreateTodo429 | CreateTodo500;
+    Errors: CreateTodo400 | CreateTodo401 | CreateTodo403 | CreateTodo409 | CreateTodo413 | CreateTodo422 | CreateTodo429 | CreateTodo500;
 };

@@ -49,6 +49,40 @@ When(
   },
 );
 
+When(
+  "user {string} in tenant {string} updates that todo's title to {string}",
+  async function (this: TodoWorld, user: string, tenant: string, title: string) {
+    this.response = await invoke({
+      method: "PATCH",
+      resource: "/todos/{todo_id}",
+      pathParameters: { todo_id: this.lastTodoId! },
+      body: { title },
+      claims: { sub: user, "custom:tenant_id": tenant },
+    });
+  },
+);
+
+When(
+  "user {string} in tenant {string} deletes that todo",
+  async function (this: TodoWorld, user: string, tenant: string) {
+    this.response = await invoke({
+      method: "DELETE",
+      resource: "/todos/{todo_id}",
+      pathParameters: { todo_id: this.lastTodoId! },
+      claims: { sub: user, "custom:tenant_id": tenant },
+    });
+  },
+);
+
+When("I fetch that todo", async function (this: TodoWorld) {
+  this.response = await invoke({
+    method: "GET",
+    resource: "/todos/{todo_id}",
+    pathParameters: { todo_id: this.lastTodoId! },
+    claims: this.claims,
+  });
+});
+
 When("I delete the todo {string}", async function (this: TodoWorld, id: string) {
   this.response = await invoke({
     method: "DELETE",
@@ -65,6 +99,11 @@ Then("the response status is {int}", function (this: TodoWorld, status: number) 
 Then("the todo has status {string}", function (this: TodoWorld, status: string) {
   const body = this.body() as { status?: string };
   assert.equal(body.status, status);
+});
+
+Then("the todo has title {string}", function (this: TodoWorld, title: string) {
+  const body = this.body() as { title?: string };
+  assert.equal(body.title, title);
 });
 
 Then("the list contains at least {int} todos", function (this: TodoWorld, n: number) {

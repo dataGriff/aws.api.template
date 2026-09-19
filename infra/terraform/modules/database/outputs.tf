@@ -7,6 +7,6 @@ locals {
 output "endpoint" { value = local.endpoint }
 output "port" { value = 5432 }
 output "security_group_id" { value = aws_security_group.db.id }
-output "kms_key_arn" { value = aws_kms_key.db.arn }
+output "kms_key_arn" { value = local.kms_key_arn }
 output "db_identifier" { value = local.db_id }
 output "db_arn" { value = local.db_arn }

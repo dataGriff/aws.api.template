@@ -1,18 +1,20 @@
 import type { Todo, TodoCreate, TodoStatus, TodoUpdate } from "@app/contracts";
+import { z } from "zod";
 import type { AuthContext } from "../auth/claims.js";
 import { query } from "../db/pool.js";
+import { BadRequestError } from "../errors.js";
 
 interface TodoRow {
   todo_id: string;
   title: string;
   description: string | null;
   status: TodoStatus;
-  due_date: Date | null;
+  // `date` columns are returned as "YYYY-MM-DD" strings (see db/pool.ts type
+  // parser) so the value never shifts with the process timezone.
+  due_date: string | null;
   created_at: Date;
   updated_at: Date;
 }
-
-const toDate = (d: Date | null): string | null => (d ? d.toISOString().slice(0, 10) : null);
 
 function toTodo(row: TodoRow): Todo {
   return {
@@ -20,19 +22,34 @@ function toTodo(row: TodoRow): Todo {
     title: row.title,
     description: row.description,
     status: row.status,
-    due_date: toDate(row.due_date),
+    due_date: row.due_date,
     created_at: row.created_at.toISOString(),
     updated_at: row.updated_at.toISOString(),
   };
 }
 
-const encodeCursor = (row: TodoRow): string =>
+// Keyset cursor: "<created_at ISO>|<todo_id>", base64url-encoded. Opaque to
+// clients but validated on the way back in so a tampered or truncated cursor
+// is a 400, never a database error (500).
+const cursorSchema = z.object({
+  created_at: z.string().datetime(),
+  todo_id: z.string().uuid(),
+});
+
+export const encodeCursor = (row: Pick<TodoRow, "created_at" | "todo_id">): string =>
   Buffer.from(`${row.created_at.toISOString()}|${row.todo_id}`).toString("base64url");
 
-function decodeCursor(cursor: string): { created_at: string; todo_id: string } {
-  const [created_at, todo_id] = Buffer.from(cursor, "base64url").toString("utf8").split("|");
-  if (!created_at || !todo_id) throw new Error("invalid cursor");
-  return { created_at, todo_id };
+export function decodeCursor(cursor: string): { created_at: string; todo_id: string } {
+  const [created_at, todo_id, ...rest] = Buffer.from(cursor, "base64url")
+    .toString("utf8")
+    .split("|");
+  const parsed = cursorSchema.safeParse({ created_at, todo_id });
+  if (!parsed.success || rest.length > 0) {
+    throw new BadRequestError("Invalid pagination cursor", [
+      { field: "cursor", message: "cursor is malformed or was not issued by this API" },
+    ]);
+  }
+  return parsed.data;
 }
 
 export interface ListParams {

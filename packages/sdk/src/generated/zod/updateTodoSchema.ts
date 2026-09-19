@@ -3,7 +3,7 @@
 * Do not edit manually.
 */
 
-import type { UpdateTodoPathParams, UpdateTodo200, UpdateTodo400, UpdateTodo401, UpdateTodo404, UpdateTodo422, UpdateTodo500, UpdateTodoMutationRequest, UpdateTodoMutationResponse } from "../types/UpdateTodo.ts";
+import type { UpdateTodoPathParams, UpdateTodo200, UpdateTodo400, UpdateTodo401, UpdateTodo403, UpdateTodo404, UpdateTodo413, UpdateTodo422, UpdateTodo429, UpdateTodo500, UpdateTodoMutationRequest, UpdateTodoMutationResponse } from "../types/UpdateTodo.ts";
 import type { ToZod } from "@kubb/plugin-zod/utils";
 import { problemSchema } from "./problemSchema.ts";
 import { todoSchema } from "./todoSchema.ts";
@@ -30,14 +30,29 @@ export const updateTodo400Schema = z.lazy(() => problemSchema).describe("RFC 780
 export const updateTodo401Schema = z.lazy(() => problemSchema).describe("RFC 7807 problem detail") as unknown as ToZod<UpdateTodo401>
 
 /**
+ * @description Missing or invalid API key, or the key\'s usage plan does not cover this API
+ */
+export const updateTodo403Schema = z.lazy(() => problemSchema).describe("RFC 7807 problem detail") as unknown as ToZod<UpdateTodo403>
+
+/**
  * @description Resource not found
  */
 export const updateTodo404Schema = z.lazy(() => problemSchema).describe("RFC 7807 problem detail") as unknown as ToZod<UpdateTodo404>
 
 /**
+ * @description Request body exceeds the gateway limit
+ */
+export const updateTodo413Schema = z.lazy(() => problemSchema).describe("RFC 7807 problem detail") as unknown as ToZod<UpdateTodo413>
+
+/**
  * @description Semantic validation failed
  */
 export const updateTodo422Schema = z.lazy(() => problemSchema).describe("RFC 7807 problem detail") as unknown as ToZod<UpdateTodo422>
+
+/**
+ * @description Rate limit or quota exceeded
+ */
+export const updateTodo429Schema = z.lazy(() => problemSchema).describe("RFC 7807 problem detail") as unknown as ToZod<UpdateTodo429>
 
 /**
  * @description Unexpected error

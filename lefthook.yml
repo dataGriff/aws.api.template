@@ -15,4 +15,4 @@ pre-push:
 commit-msg:
   commands:
     conventional:
-      run: npx --yes commitlint --edit {1}
+      run: pnpm exec commitlint --edit {1}

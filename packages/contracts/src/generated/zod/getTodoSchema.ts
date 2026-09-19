@@ -3,7 +3,7 @@
 * Do not edit manually.
 */
 
-import type { GetTodoPathParams, GetTodo200, GetTodo401, GetTodo404, GetTodo500, GetTodoQueryResponse } from "../types/GetTodo.ts";
+import type { GetTodoPathParams, GetTodo200, GetTodo400, GetTodo401, GetTodo403, GetTodo404, GetTodo429, GetTodo500, GetTodoQueryResponse } from "../types/GetTodo.ts";
 import type { ToZod } from "@kubb/plugin-zod/utils";
 import { problemSchema } from "./problemSchema.ts";
 import { todoSchema } from "./todoSchema.ts";
@@ -23,6 +23,13 @@ export const getTodo200Schema = z.lazy(() => todoSchema) as unknown as ToZod<Get
 export type GetTodo200Schema = GetTodo200
 
 /**
+ * @description Malformed request
+ */
+export const getTodo400Schema = z.lazy(() => problemSchema).describe("RFC 7807 problem detail") as unknown as ToZod<GetTodo400>
+
+export type GetTodo400Schema = GetTodo400
+
+/**
  * @description Missing or invalid credentials
  */
 export const getTodo401Schema = z.lazy(() => problemSchema).describe("RFC 7807 problem detail") as unknown as ToZod<GetTodo401>
@@ -30,11 +37,25 @@ export const getTodo401Schema = z.lazy(() => problemSchema).describe("RFC 7807 p
 export type GetTodo401Schema = GetTodo401
 
 /**
+ * @description Missing or invalid API key, or the key\'s usage plan does not cover this API
+ */
+export const getTodo403Schema = z.lazy(() => problemSchema).describe("RFC 7807 problem detail") as unknown as ToZod<GetTodo403>
+
+export type GetTodo403Schema = GetTodo403
+
+/**
  * @description Resource not found
  */
 export const getTodo404Schema = z.lazy(() => problemSchema).describe("RFC 7807 problem detail") as unknown as ToZod<GetTodo404>
 
 export type GetTodo404Schema = GetTodo404
+
+/**
+ * @description Rate limit or quota exceeded
+ */
+export const getTodo429Schema = z.lazy(() => problemSchema).describe("RFC 7807 problem detail") as unknown as ToZod<GetTodo429>
+
+export type GetTodo429Schema = GetTodo429
 
 /**
  * @description Unexpected error

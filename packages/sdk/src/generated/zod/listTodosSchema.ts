@@ -3,7 +3,7 @@
 * Do not edit manually.
 */
 
-import type { ListTodosQueryParams, ListTodos200, ListTodos400, ListTodos401, ListTodos429, ListTodos500, ListTodosQueryResponse } from "../types/ListTodos.ts";
+import type { ListTodosQueryParams, ListTodos200, ListTodos400, ListTodos401, ListTodos403, ListTodos429, ListTodos500, ListTodosQueryResponse } from "../types/ListTodos.ts";
 import type { ToZod } from "@kubb/plugin-zod/utils";
 import { problemSchema } from "./problemSchema.ts";
 import { todoPageSchema } from "./todoPageSchema.ts";
@@ -30,6 +30,11 @@ export const listTodos400Schema = z.lazy(() => problemSchema).describe("RFC 7807
  * @description Missing or invalid credentials
  */
 export const listTodos401Schema = z.lazy(() => problemSchema).describe("RFC 7807 problem detail") as unknown as ToZod<ListTodos401>
+
+/**
+ * @description Missing or invalid API key, or the key\'s usage plan does not cover this API
+ */
+export const listTodos403Schema = z.lazy(() => problemSchema).describe("RFC 7807 problem detail") as unknown as ToZod<ListTodos403>
 
 /**
  * @description Rate limit or quota exceeded

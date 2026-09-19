@@ -3,7 +3,7 @@
 * Do not edit manually.
 */
 
-import type { DeleteTodoPathParams, DeleteTodo204, DeleteTodo401, DeleteTodo404, DeleteTodo500, DeleteTodoMutationResponse } from "../types/DeleteTodo.ts";
+import type { DeleteTodoPathParams, DeleteTodo204, DeleteTodo400, DeleteTodo401, DeleteTodo403, DeleteTodo404, DeleteTodo429, DeleteTodo500, DeleteTodoMutationResponse } from "../types/DeleteTodo.ts";
 import type { ToZod } from "@kubb/plugin-zod/utils";
 import { problemSchema } from "./problemSchema.ts";
 import { z } from "zod";
@@ -22,6 +22,13 @@ export const deleteTodo204Schema = z.any() as unknown as ToZod<DeleteTodo204>
 export type DeleteTodo204Schema = DeleteTodo204
 
 /**
+ * @description Malformed request
+ */
+export const deleteTodo400Schema = z.lazy(() => problemSchema).describe("RFC 7807 problem detail") as unknown as ToZod<DeleteTodo400>
+
+export type DeleteTodo400Schema = DeleteTodo400
+
+/**
  * @description Missing or invalid credentials
  */
 export const deleteTodo401Schema = z.lazy(() => problemSchema).describe("RFC 7807 problem detail") as unknown as ToZod<DeleteTodo401>
@@ -29,11 +36,25 @@ export const deleteTodo401Schema = z.lazy(() => problemSchema).describe("RFC 780
 export type DeleteTodo401Schema = DeleteTodo401
 
 /**
+ * @description Missing or invalid API key, or the key\'s usage plan does not cover this API
+ */
+export const deleteTodo403Schema = z.lazy(() => problemSchema).describe("RFC 7807 problem detail") as unknown as ToZod<DeleteTodo403>
+
+export type DeleteTodo403Schema = DeleteTodo403
+
+/**
  * @description Resource not found
  */
 export const deleteTodo404Schema = z.lazy(() => problemSchema).describe("RFC 7807 problem detail") as unknown as ToZod<DeleteTodo404>
 
 export type DeleteTodo404Schema = DeleteTodo404
+
+/**
+ * @description Rate limit or quota exceeded
+ */
+export const deleteTodo429Schema = z.lazy(() => problemSchema).describe("RFC 7807 problem detail") as unknown as ToZod<DeleteTodo429>
+
+export type DeleteTodo429Schema = DeleteTodo429
 
 /**
  * @description Unexpected error

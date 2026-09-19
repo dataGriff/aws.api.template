@@ -90,9 +90,19 @@ tasks:
       - node scripts/render-gateway-spec.mjs
   gen:check:
     desc: Fail if generated artifacts are stale (contract drift gate)
+    vars:
+      # Every path `task gen` writes. `git status --porcelain` (not `git diff`)
+      # so brand-new untracked files count as drift too.
+      GEN_PATHS: packages/contracts/src/generated packages/sdk/src/generated collections docs/api-reference infra/terraform/modules/api-gateway/openapi.gateway.yaml
     cmds:
       - task: gen
-      - git diff --exit-code -- packages/contracts/src/generated packages/sdk/src/generated collections docs/api-reference || (echo "Generated artifacts are stale. Run 'task gen' and commit." && exit 1)
+      - |
+        drift="$(git status --porcelain -- {{.GEN_PATHS}})"
+        if [ -n "$drift" ]; then
+          echo "Generated artifacts are stale. Run 'task gen' and commit:"
+          echo "$drift"
+          exit 1
+        fi
   gen:httpfiles:
     desc: Generate the .http request collection from the contract
     cmds:
@@ -106,15 +116,16 @@ tasks:
   # Tests (layers kept distinct — see docs/testing)
   # ---------------------------------------------------------------------------
   test:
-    desc: Run unit + integration + BDD
+    desc: Run unit + integration + BDD + contract
     cmds:
       - task: test:unit
       - task: test:integration
       - task: test:bdd
+      - task: test:contract
   test:unit:
-    desc: Unit tests (pure logic, no I/O)
+    desc: Unit tests (pure logic, no I/O) — every workspace package that defines test:unit
     cmds:
-      - pnpm --filter @app/api test:unit
+      - pnpm -r --if-present test:unit
   test:integration:
     desc: Integration tests (real Postgres via testcontainers + migrations)
     cmds:
@@ -124,7 +135,7 @@ tasks:
     cmds:
       - pnpm --filter @app/api test:bdd
   test:contract:
-    desc: Contract conformance (Prism oracle + spectral)
+    desc: "Contract conformance: real handler responses validated against the generated schemas"
     cmds:
       - pnpm --filter @app/api test:contract
   test:fuzz:
@@ -149,7 +160,7 @@ tasks:
     cmds:
       - pnpm --filter @app/api serve
   token:
-    desc: "Mint a JWT (cognito-local locally / Cognito deployed) and write it to the .http env"
+    desc: "Mint an unsigned local stub JWT into the git-ignored .http private env (local only)"
     cmds:
       - node scripts/mint-token.mjs {{.CLI_ARGS}}
 
@@ -210,14 +221,16 @@ tasks:
     cmds:
       - terraform -chdir={{.TF_DIR}}/envs/{{.ENV}} fmt -recursive ../../
   tf:validate:
-    desc: Terraform fmt-check + validate + tflint
-    dir: "{{.TF_DIR}}/envs/{{.ENV}}"
+    desc: Terraform fmt-check + validate (every env + bootstrap) + tflint (recursive)
     cmds:
-      - terraform fmt -check -recursive ../../
-      - terraform init -backend=false
-      - terraform validate
-      - tflint --chdir=../../ --init
-      - tflint --chdir=../../
+      - terraform -chdir={{.TF_DIR}} fmt -check -recursive
+      - for: { var: TF_ROOTS }
+        cmd: terraform -chdir={{.TF_DIR}}/{{.ITEM}} init -backend=false -input=false >/dev/null && terraform -chdir={{.TF_DIR}}/{{.ITEM}} validate
+      # --recursive: infra/terraform itself holds no .tf files, only modules/, stack/, envs/, bootstrap/.
+      - tflint --chdir={{.TF_DIR}} --init
+      - tflint --chdir={{.TF_DIR}} --recursive
+    vars:
+      TF_ROOTS: envs/dev envs/staging envs/prod bootstrap
   tf:scan:
     desc: IaC security scan (Trivy config + Checkov)
     cmds:
@@ -227,20 +240,29 @@ tasks:
       # (many relate to opt-in features that are intentionally off by default).
       - checkov -d {{.TF_DIR}} --quiet --compact --soft-fail
   tf:plan:
-    desc: "Terraform plan for an env, e.g. task tf:plan ENV=dev"
+    desc: "Terraform plan for an env, e.g. task tf:plan ENV=dev (needs TF_STATE_BUCKET)"
     dir: "{{.TF_DIR}}/envs/{{.ENV}}"
+    preconditions:
+      - sh: test -n "$TF_STATE_BUCKET" || test -n "$TF_CLI_ARGS_init"
+        msg: "Set TF_STATE_BUCKET=<state bucket> and TF_STATE_KMS_KEY_ARN=<key arn> from `terraform output` in bootstrap/ (see docs/operations)."
     cmds:
-      - terraform init
-      - terraform plan -var-file=terraform.tfvars
+      # Backend bucket/region come from the environment (CI sets TF_CLI_ARGS_init;
+      # locally export TF_STATE_BUCKET) so no account-specific value is committed.
+      - terraform init -input=false ${TF_STATE_BUCKET:+-backend-config=bucket=$TF_STATE_BUCKET -backend-config=region=${AWS_REGION:-eu-west-2}} ${TF_STATE_KMS_KEY_ARN:+-backend-config=kms_key_id=$TF_STATE_KMS_KEY_ARN}
+      - terraform plan -input=false -var-file=terraform.tfvars -out=tfplan
   tf:apply:
-    desc: "Terraform apply for an env (used by CI deploy)"
+    desc: "Terraform apply for an env (used by CI deploy). Applies the saved plan from tf:plan."
     dir: "{{.TF_DIR}}/envs/{{.ENV}}"
+    preconditions:
+      - sh: test -n "$TF_STATE_BUCKET" || test -n "$TF_CLI_ARGS_init"
+        msg: "Set TF_STATE_BUCKET=<state bucket> and TF_STATE_KMS_KEY_ARN=<key arn> from `terraform output` in bootstrap/ (see docs/operations)."
     cmds:
-      - terraform init
-      - terraform apply -auto-approve -var-file=terraform.tfvars
+      - task: tf:plan
+        vars: { ENV: "{{.ENV}}" }
+      - terraform apply -input=false tfplan
 
   deploy:
-    desc: "Full deploy for an env: apply infra then migrate"
+    desc: "Full deploy for an env: apply infra, then run migrations (migrations must be backward-compatible with the version that was live; see docs/operations)"
     cmds:
       - task: tf:apply
         vars: { ENV: "{{.ENV}}" }
@@ -255,9 +277,9 @@ tasks:
   # Release
   # ---------------------------------------------------------------------------
   release:
-    desc: Run semantic-release (changelog, tag, GitHub release)
+    desc: Run semantic-release (changelog, tag, GitHub release) — pinned via the root devDependencies/lockfile
     cmds:
-      - npx -y -p semantic-release@24 -p @semantic-release/changelog@6 -p @semantic-release/git@10 semantic-release -e ./.releaserc.json
+      - pnpm exec semantic-release -e ./.releaserc.json
   sdk:publish:
     desc: "Build and publish the consumer SDK at VERSION=<x.y.z>"
     cmds:
@@ -270,7 +292,12 @@ tasks:
   # Cost
   # ---------------------------------------------------------------------------
   cost:
-    desc: Infracost breakdown for an env
+    desc: "Infracost breakdown for an env (JSON to OUT=<file> when set, e.g. for the PR comment)"
     dir: "{{.TF_DIR}}/envs/{{.ENV}}"
     cmds:
-      - infracost breakdown --path .
+      - infracost breakdown --path . {{if .OUT}}--format json --out-file {{.OUT}}{{end}}
+
+  hooks:install:
+    desc: Install the git hooks (also runs automatically on `pnpm install`)
+    cmds:
+      - lefthook install

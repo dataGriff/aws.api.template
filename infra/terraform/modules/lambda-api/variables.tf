@@ -1,7 +1,6 @@
 variable "name" { type = string }
 variable "env" { type = string }
 variable "region" { type = string }
-variable "vpc_id" { type = string }
 variable "subnet_ids" { type = list(string) }
 variable "security_group_ids" { type = list(string) }
 variable "dist_dir" {
@@ -22,7 +21,10 @@ variable "db_user" {
   type    = string
   default = "app"
 }
-variable "secret_arn" { type = string }
+variable "secret_arn" {
+  type    = string
+  default = null
+}
 
 variable "rds_proxy_resource_id" {
   type    = string
@@ -40,6 +42,11 @@ variable "idempotency_table_arn" {
 variable "memory_size" {
   type    = number
   default = 512
+}
+variable "reserved_concurrency" {
+  type        = number
+  default     = -1
+  description = "Reserved concurrent executions (-1 = none). Size to the DB/proxy connection budget."
 }
 variable "log_retention_days" {
   type    = number

@@ -15,12 +15,16 @@ concurrency:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0 # gitleaks (task security:secrets) scans history, same as the local hook
+          persist-credentials: false
 
       # Installs every tool pinned in .mise.toml, so CI uses the SAME versions
       # as local dev and the git hooks.
-      - uses: jdx/mise-action@v2
+      - uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2.4.4
         with:
           install: true
           cache: true
@@ -30,7 +34,7 @@ jobs:
 
       # The one gate. Identical to running `task ci` on a laptop:
       # format, lint, typecheck, spec lint, gen-drift, secrets, unit,
-      # build, integration (testcontainers), BDD, contract, terraform validate,
-      # terraform scan, dependency scan.
+      # build, integration (testcontainers), BDD, contract, terraform validate
+      # (all envs + bootstrap, tflint recursive), terraform scan, dependency scan.
       - name: task ci
         run: task ci

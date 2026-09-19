@@ -4,7 +4,7 @@
 */
 
 import fetch from "@kubb/plugin-client/clients/fetch";
-import type { CreateTodoMutationRequest, CreateTodoMutationResponse, CreateTodoHeaderParams, CreateTodo400, CreateTodo401, CreateTodo409, CreateTodo422, CreateTodo429, CreateTodo500 } from "../types/CreateTodo.ts";
+import type { CreateTodoMutationRequest, CreateTodoMutationResponse, CreateTodoHeaderParams, CreateTodo400, CreateTodo401, CreateTodo403, CreateTodo409, CreateTodo413, CreateTodo422, CreateTodo429, CreateTodo500 } from "../types/CreateTodo.ts";
 import type { RequestConfig, ResponseErrorConfig } from "@kubb/plugin-client/clients/fetch";
 
 function getCreateTodoUrl() {
@@ -21,6 +21,6 @@ export async function createTodo(data: CreateTodoMutationRequest, headers?: Crea
   
   const requestData = data  
   
-  const res = await request<CreateTodoMutationResponse, ResponseErrorConfig<CreateTodo400 | CreateTodo401 | CreateTodo409 | CreateTodo422 | CreateTodo429 | CreateTodo500>, CreateTodoMutationRequest>({ method : "POST", url : getCreateTodoUrl().url.toString(), data : requestData, ... requestConfig, headers : { ...headers, ...requestConfig.headers } })  
+  const res = await request<CreateTodoMutationResponse, ResponseErrorConfig<CreateTodo400 | CreateTodo401 | CreateTodo403 | CreateTodo409 | CreateTodo413 | CreateTodo422 | CreateTodo429 | CreateTodo500>, CreateTodoMutationRequest>({ method : "POST", url : getCreateTodoUrl().url.toString(), data : requestData, ... requestConfig, headers : { ...headers, ...requestConfig.headers } })  
   return res.data
 }

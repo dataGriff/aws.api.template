@@ -45,6 +45,11 @@ export type ListTodos400 = Problem;
 export type ListTodos401 = Problem;
 
 /**
+ * @description Missing or invalid API key, or the key\'s usage plan does not cover this API
+*/
+export type ListTodos403 = Problem;
+
+/**
  * @description Rate limit or quota exceeded
 */
 export type ListTodos429 = Problem;
@@ -59,5 +64,5 @@ export type ListTodosQueryResponse = ListTodos200;
 export type ListTodosQuery = {
     Response: ListTodos200;
     QueryParams: ListTodosQueryParams;
-    Errors: ListTodos400 | ListTodos401 | ListTodos429 | ListTodos500;
+    Errors: ListTodos400 | ListTodos401 | ListTodos403 | ListTodos429 | ListTodos500;
 };

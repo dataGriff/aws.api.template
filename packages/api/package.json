@@ -10,7 +10,7 @@
     "db:migrate:down": "node-pg-migrate down -m src/db/migrations --no-lock",
     "test:unit": "vitest run test/unit",
     "test:integration": "vitest run test/integration",
-    "test:bdd": "NODE_OPTIONS=\"--import tsx\" cucumber-js",
+    "test:bdd": "mkdir -p test-results && NODE_OPTIONS=\"--import tsx\" cucumber-js",
     "test:contract": "vitest run test/contract"
   },
   "dependencies": {
@@ -23,6 +23,7 @@
     "@aws-sdk/client-dynamodb": "^3.679.0",
     "@aws-sdk/client-secrets-manager": "^3.679.0",
     "@aws-sdk/rds-signer": "^3.679.0",
+    "@aws-sdk/util-dynamodb": "^3.679.0",
     "@middy/core": "^5.5.1",
     "@middy/http-header-normalizer": "^5.5.1",
     "pg": "^8.13.1",
@@ -37,6 +38,7 @@
     "node-pg-migrate": "^7.7.1",
     "testcontainers": "^10.13.2",
     "tsx": "^4.19.2",
-    "vitest": "^2.1.4"
+    "vitest": "^2.1.4",
+    "yaml": "^2.6.0"
   }
 }

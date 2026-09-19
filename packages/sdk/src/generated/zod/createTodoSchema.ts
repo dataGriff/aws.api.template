@@ -3,7 +3,7 @@
 * Do not edit manually.
 */
 
-import type { CreateTodoHeaderParams, CreateTodo201, CreateTodo400, CreateTodo401, CreateTodo409, CreateTodo422, CreateTodo429, CreateTodo500, CreateTodoMutationRequest, CreateTodoMutationResponse } from "../types/CreateTodo.ts";
+import type { CreateTodoHeaderParams, CreateTodo201, CreateTodo400, CreateTodo401, CreateTodo403, CreateTodo409, CreateTodo413, CreateTodo422, CreateTodo429, CreateTodo500, CreateTodoMutationRequest, CreateTodoMutationResponse } from "../types/CreateTodo.ts";
 import type { ToZod } from "@kubb/plugin-zod/utils";
 import { problemSchema } from "./problemSchema.ts";
 import { todoCreateSchema } from "./todoCreateSchema.ts";
@@ -11,7 +11,7 @@ import { todoSchema } from "./todoSchema.ts";
 import { z } from "zod";
 
 export const createTodoHeaderParamsSchema = z.object({
-    "idempotency-key": z.string().min(8).max(128).describe("Client-supplied key to make creation idempotent").optional()
+    "idempotency-key": z.string().min(8).max(128).describe("Client-supplied key to make creation idempotent. Replaying the same key with the same body\nreturns the original result; reusing it with a different body is rejected with 409.\n").optional()
     }).optional() as unknown as ToZod<CreateTodoHeaderParams>
 
 /**
@@ -30,9 +30,19 @@ export const createTodo400Schema = z.lazy(() => problemSchema).describe("RFC 780
 export const createTodo401Schema = z.lazy(() => problemSchema).describe("RFC 7807 problem detail") as unknown as ToZod<CreateTodo401>
 
 /**
+ * @description Missing or invalid API key, or the key\'s usage plan does not cover this API
+ */
+export const createTodo403Schema = z.lazy(() => problemSchema).describe("RFC 7807 problem detail") as unknown as ToZod<CreateTodo403>
+
+/**
  * @description Idempotency conflict
  */
 export const createTodo409Schema = z.lazy(() => problemSchema).describe("RFC 7807 problem detail") as unknown as ToZod<CreateTodo409>
+
+/**
+ * @description Request body exceeds the gateway limit
+ */
+export const createTodo413Schema = z.lazy(() => problemSchema).describe("RFC 7807 problem detail") as unknown as ToZod<CreateTodo413>
 
 /**
  * @description Semantic validation failed

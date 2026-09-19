@@ -19,14 +19,29 @@ export type DeleteTodoPathParams = {
 export type DeleteTodo204 = any;
 
 /**
+ * @description Malformed request
+*/
+export type DeleteTodo400 = Problem;
+
+/**
  * @description Missing or invalid credentials
 */
 export type DeleteTodo401 = Problem;
 
 /**
+ * @description Missing or invalid API key, or the key\'s usage plan does not cover this API
+*/
+export type DeleteTodo403 = Problem;
+
+/**
  * @description Resource not found
 */
 export type DeleteTodo404 = Problem;
+
+/**
+ * @description Rate limit or quota exceeded
+*/
+export type DeleteTodo429 = Problem;
 
 /**
  * @description Unexpected error
@@ -38,5 +53,5 @@ export type DeleteTodoMutationResponse = DeleteTodo204;
 export type DeleteTodoMutation = {
     Response: DeleteTodo204;
     PathParams: DeleteTodoPathParams;
-    Errors: DeleteTodo401 | DeleteTodo404 | DeleteTodo500;
+    Errors: DeleteTodo400 | DeleteTodo401 | DeleteTodo403 | DeleteTodo404 | DeleteTodo429 | DeleteTodo500;
 };

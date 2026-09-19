@@ -28,6 +28,18 @@ describe("error contract (problem+json)", () => {
     expect(problem.errors?.length).toBeGreaterThan(0);
   });
 
+  it("does not let a client-supplied x-request-id replace the gateway's", async () => {
+    const res = await invoke({
+      method: "POST",
+      resource: "/todos",
+      body: { title: "x" },
+      claims: null,
+      headers: { "x-request-id": "spoofed-by-client" },
+    });
+    expect(res.headers?.["x-request-id"]).toBe("test-request-id");
+    expect((parse(res) as { request_id: string }).request_id).toBe("test-request-id");
+  });
+
   it("returns 404 for an unknown route", async () => {
     const res = await invoke({ method: "GET", resource: "/nope" });
     expect(res.statusCode).toBe(404);

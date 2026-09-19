@@ -10,8 +10,9 @@ variable "enable_egress_static_ip" {
   default = false
 }
 variable "interface_endpoints" {
-  type    = list(string)
-  default = ["secretsmanager", "logs", "sts", "kms"]
+  type        = list(string)
+  description = "Interface endpoints the private subnets need (no NAT by default): every AWS API the Lambda calls, including X-Ray for tracing."
+  default     = ["secretsmanager", "logs", "sts", "kms", "xray"]
 }
 variable "tags" {
   type    = map(string)

@@ -33,5 +33,15 @@ roll-forward plus Lambda alias weighted routing for the application layer.
 `task` targets after `mise install`, guaranteeing local == CI. This is the anti-drift backbone.
 
 **ADR-9: Generated artifacts are committed and drift-gated.** Committing `contracts`, `sdk`,
-`collections`, and `docs/api-reference` makes contract changes visible in PR diffs; CI regenerates and
-`git diff --exit-code` blocks staleness.
+`collections`, `docs/api-reference` and the rendered gateway spec makes contract changes visible in
+PR diffs; CI regenerates and `git status --porcelain` on those paths (so new files count) blocks
+staleness. The hand-written route table is held to the contract by a unit test.
+
+**ADR-10: Tenant isolation lives in the repository layer, not Postgres RLS.** RLS would need
+`SET app.tenant_id` per request, which pins RDS Proxy sessions and silently disables pooling (ADR-4).
+Every query therefore binds `tenant_id AND user_sub` from validated token claims, and the BDD suite
+asserts isolation on each axis independently so removing either predicate fails a test.
+
+**ADR-11: Deploy only what CI validated.** The Deploy workflow is triggered by a successful CI run
+(not by the push itself), applies a saved plan, and serialises per environment. Renovate never
+auto-merges runtime dependencies because `main` deploys itself.

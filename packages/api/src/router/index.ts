@@ -13,25 +13,43 @@ type Handler = (event: APIGatewayProxyEvent) => Promise<APIGatewayProxyResult>;
 const health: Handler = async () =>
   json(200, { status: "ok", version: process.env.SERVICE_VERSION ?? "dev" });
 
+// Query parameter validation mirrors api/openapi.yaml. API Gateway's request
+// validator only checks that required parameters are *present*, so range and
+// type constraints must be enforced here to honour the contract's 400s.
+const listQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  cursor: z.string().max(512).optional(),
+  status: schemas.todoStatusSchema.optional(),
+});
+
 const listTodos: Handler = async (event) => {
   const auth = extractAuth(event);
-  const q = event.queryStringParameters ?? {};
-  const limit = Math.min(Math.max(Number.parseInt(q.limit ?? "20", 10) || 20, 1), 100);
-  const status = q.status ? validate<TodoStatus>(schemas.todoStatusSchema, q.status) : undefined;
+  const q = validate<{ limit: number; cursor?: string; status?: TodoStatus }>(
+    listQuerySchema,
+    event.queryStringParameters ?? {},
+  );
   const page = await todos.listTodos(auth, {
-    limit,
-    ...(status !== undefined ? { status } : {}),
+    limit: q.limit,
+    ...(q.status !== undefined ? { status: q.status } : {}),
     ...(q.cursor ? { cursor: q.cursor } : {}),
   });
   return json(200, page);
 };
 
+// Location is built from the request's own path so it is correct behind the
+// stage URL (/v1/todos) and a custom domain with any base-path mapping.
+const locationFor = (event: APIGatewayProxyEvent, id: string): string => {
+  const base = (event.requestContext?.path ?? event.path ?? "").replace(/\/+$/, "");
+  return `${base}/${id}`;
+};
+
 const createTodo: Handler = async (event) => {
   const auth = extractAuth(event);
   const input = parseBody<TodoCreate>(event, schemas.todoCreateSchema);
-  const key = event.headers?.["idempotency-key"] ?? event.headers?.["Idempotency-Key"];
+  // Headers are lower-cased by the header-normalizer middleware.
+  const key = event.headers?.["idempotency-key"];
   const created = await createTodoIdempotent(auth, input, key);
-  return json(201, created, { location: `/v1/todos/${created.todo_id}` });
+  return json(201, created, { location: locationFor(event, created.todo_id) });
 };
 
 const uuid = z.string().uuid();
@@ -44,9 +62,16 @@ const pathId = (event: APIGatewayProxyEvent): string => {
 const getTodo: Handler = async (event) =>
   json(200, await todos.getTodo(extractAuth(event), pathId(event)));
 
+// The generated zod schema cannot express the contract's `minProperties: 1`,
+// so the "at least one field" rule is applied here.
+const todoUpdateSchema = schemas.todoUpdateSchema.refine(
+  (patch) => Object.values(patch as Record<string, unknown>).some((v) => v !== undefined),
+  { message: "At least one field must be provided" },
+);
+
 const updateTodo: Handler = async (event) => {
   const auth = extractAuth(event);
-  const patch = parseBody<TodoUpdate>(event, schemas.todoUpdateSchema);
+  const patch = parseBody<TodoUpdate>(event, todoUpdateSchema);
   return json(200, await todos.updateTodo(auth, pathId(event), patch));
 };
 
@@ -56,8 +81,9 @@ const deleteTodo: Handler = async (event) => {
 };
 
 // Keyed by "<METHOD> <resource>" where resource is the API Gateway path
-// template. Mirrors the operations in api/openapi.yaml.
-const routes: Record<string, Handler> = {
+// template. Must match the operations in api/openapi.yaml exactly — a unit
+// test (test/unit/routes-contract.test.ts) fails the build on drift.
+export const routes: Readonly<Record<string, Handler>> = {
   "GET /health": health,
   "GET /todos": listTodos,
   "POST /todos": createTodo,

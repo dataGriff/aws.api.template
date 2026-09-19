@@ -4,7 +4,7 @@
 */
 
 import fetch from "@kubb/plugin-client/clients/fetch";
-import type { DeleteTodoMutationResponse, DeleteTodoPathParams, DeleteTodo401, DeleteTodo404, DeleteTodo500 } from "../types/DeleteTodo.ts";
+import type { DeleteTodoMutationResponse, DeleteTodoPathParams, DeleteTodo400, DeleteTodo401, DeleteTodo403, DeleteTodo404, DeleteTodo429, DeleteTodo500 } from "../types/DeleteTodo.ts";
 import type { RequestConfig, ResponseErrorConfig } from "@kubb/plugin-client/clients/fetch";
 
 function getDeleteTodoUrl(todo_id: DeleteTodoPathParams["todo_id"]) {
@@ -19,6 +19,6 @@ function getDeleteTodoUrl(todo_id: DeleteTodoPathParams["todo_id"]) {
 export async function deleteTodo(todo_id: DeleteTodoPathParams["todo_id"], config: Partial<RequestConfig> & { client?: typeof fetch } = {}) {
   const { client: request = fetch, ...requestConfig } = config  
   
-  const res = await request<DeleteTodoMutationResponse, ResponseErrorConfig<DeleteTodo401 | DeleteTodo404 | DeleteTodo500>, unknown>({ method : "DELETE", url : getDeleteTodoUrl(todo_id).url.toString(), ... requestConfig })  
+  const res = await request<DeleteTodoMutationResponse, ResponseErrorConfig<DeleteTodo400 | DeleteTodo401 | DeleteTodo403 | DeleteTodo404 | DeleteTodo429 | DeleteTodo500>, unknown>({ method : "DELETE", url : getDeleteTodoUrl(todo_id).url.toString(), ... requestConfig })  
   return res.data
 }

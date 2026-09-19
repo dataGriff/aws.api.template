@@ -44,17 +44,24 @@ The Todo domain is intentionally thin — mirror it for your resource(s):
 
 - `packages/api/src/db/migrations/` — add a new migration for your schema (keep it forward-only; do
   not edit the shipped one once applied). Multi-tenant tables should keep `tenant_id` + `user_sub`.
+  The test helper (`test/helpers/db.ts`) applies every migration with the real runner, so nothing
+  else needs updating for tests to see the new schema.
 - `packages/api/src/repo/` — queries, all scoped by the token's tenant/user (never trust client input).
 - `packages/api/src/domain/` — business rules.
 - `packages/api/src/router/index.ts` — map each `operationId`/route to a handler; validate bodies with
-  the generated `schemas.*` and path params with a local zod check.
+  the generated `schemas.*` and path/query params with a local zod check. The unit test
+  `test/unit/routes-contract.test.ts` fails until the `routes` table matches the contract exactly.
+- `local/server.ts` — the `ROUTES` table (regex → API Gateway resource template) mirrors the
+  contract's paths for `task serve`; add one entry per path.
+- `scripts/mint-token.mjs` — if your custom claims change, update the stub token's claims.
 - `packages/api/src/db/queries/*.sql` — replace the example queries with useful ones for your data.
 
 ## 5. Rewrite the behavioural specs (= acceptance criteria)
 
 - `packages/api/test/features/*.feature` — express your acceptance criteria as Gherkin scenarios; they
   ARE the tests. Update `steps/`.
-- Update unit + integration + contract tests to your resources. Keep a tenant-isolation scenario.
+- Update unit + integration + contract tests to your resources. Keep the tenant-isolation scenarios
+  (same user / other tenant AND same tenant / other user).
 
 ## 6. Adapt auth claims if needed
 
@@ -64,9 +71,12 @@ The Todo domain is intentionally thin — mirror it for your resource(s):
 ## 7. Prove it
 
 ```bash
-task ci          # full gate: lint, typecheck, gen-drift, unit, integration, BDD, contract, tf validate/scan
+task ci          # full gate: lint, typecheck, gen-drift, unit (all packages), integration, BDD, contract, tf validate/scan
 task test:fuzz   # optional: property fuzzing once a server/env is available
 ```
+
+`task ci` needs Docker (testcontainers). Without it, run `task check` plus `task build` and
+`task tf:validate`, and let CI run the container-backed layers.
 
 Iterate until green. Then update `docs/` (tutorial backlog, consumer guide) to describe the new domain,
 open a draft PR, and hand back.
@@ -76,7 +86,7 @@ open a draft PR, and hand back.
 - [ ] `api/openapi.yaml` replaced, `task spec:lint` clean (snake_case enforced)
 - [ ] `task gen` run; generated artifacts committed
 - [ ] `service_name` renamed everywhere
-- [ ] migrations, repo, domain, router replaced
+- [ ] migrations, repo, domain, router replaced (+ `local/server.ts` ROUTES, `scripts/mint-token.mjs` claims)
 - [ ] BDD features rewritten as the new acceptance criteria
 - [ ] custom claims adjusted if required
 - [ ] `task ci` green

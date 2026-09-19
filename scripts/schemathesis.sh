@@ -18,5 +18,6 @@ if [[ -n "${API_KEY:-}" ]]; then
   args+=(--header "x-api-key: ${API_KEY}")
 fi
 
-echo "schemathesis ${args[*]}"
+# Do not echo the argument list: it carries the bearer token / API key.
+echo "schemathesis run ${SCHEMA} --base-url ${API_URL} --checks all --hypothesis-max-examples ${MAX_EXAMPLES}${API_TOKEN:+ (with bearer token)}${API_KEY:+ (with api key)}"
 exec schemathesis "${args[@]}"

@@ -31,14 +31,29 @@ export type UpdateTodo400 = Problem;
 export type UpdateTodo401 = Problem;
 
 /**
+ * @description Missing or invalid API key, or the key\'s usage plan does not cover this API
+*/
+export type UpdateTodo403 = Problem;
+
+/**
  * @description Resource not found
 */
 export type UpdateTodo404 = Problem;
 
 /**
+ * @description Request body exceeds the gateway limit
+*/
+export type UpdateTodo413 = Problem;
+
+/**
  * @description Semantic validation failed
 */
 export type UpdateTodo422 = Problem;
+
+/**
+ * @description Rate limit or quota exceeded
+*/
+export type UpdateTodo429 = Problem;
 
 /**
  * @description Unexpected error
@@ -53,5 +68,5 @@ export type UpdateTodoMutation = {
     Response: UpdateTodo200;
     Request: UpdateTodoMutationRequest;
     PathParams: UpdateTodoPathParams;
-    Errors: UpdateTodo400 | UpdateTodo401 | UpdateTodo404 | UpdateTodo422 | UpdateTodo500;
+    Errors: UpdateTodo400 | UpdateTodo401 | UpdateTodo403 | UpdateTodo404 | UpdateTodo413 | UpdateTodo422 | UpdateTodo429 | UpdateTodo500;
 };

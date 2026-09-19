@@ -20,14 +20,29 @@ export type GetTodoPathParams = {
 export type GetTodo200 = Todo;
 
 /**
+ * @description Malformed request
+*/
+export type GetTodo400 = Problem;
+
+/**
  * @description Missing or invalid credentials
 */
 export type GetTodo401 = Problem;
 
 /**
+ * @description Missing or invalid API key, or the key\'s usage plan does not cover this API
+*/
+export type GetTodo403 = Problem;
+
+/**
  * @description Resource not found
 */
 export type GetTodo404 = Problem;
+
+/**
+ * @description Rate limit or quota exceeded
+*/
+export type GetTodo429 = Problem;
 
 /**
  * @description Unexpected error
@@ -39,5 +54,5 @@ export type GetTodoQueryResponse = GetTodo200;
 export type GetTodoQuery = {
     Response: GetTodo200;
     PathParams: GetTodoPathParams;
-    Errors: GetTodo401 | GetTodo404 | GetTodo500;
+    Errors: GetTodo400 | GetTodo401 | GetTodo403 | GetTodo404 | GetTodo429 | GetTodo500;
 };

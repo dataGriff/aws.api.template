@@ -14,12 +14,13 @@ x-api-key: <your_api_key>
 ```
 
 Get a token from the Cognito hosted UI (Authorization Code + PKCE) for user-facing apps, or via
-`USER_PASSWORD_AUTH` against a test app client for scripts/CI:
+`USER_PASSWORD_AUTH` against the **test** app client (`cognito_test_client_id` output; only created
+in dev/staging) for scripts/CI — the app client deliberately does not allow password auth:
 
 ```bash
 aws cognito-idp initiate-auth \
   --auth-flow USER_PASSWORD_AUTH \
-  --client-id "$APP_CLIENT_ID" \
+  --client-id "$TEST_CLIENT_ID" \
   --auth-parameters USERNAME=alice@example.com,PASSWORD='…'
 ```
 
@@ -29,8 +30,10 @@ every response to your tenant + user.
 ## 2. Explore with the .http collection
 
 Import `collections/*.http` into the VS Code REST Client or JetBrains HTTP Client. Pick an environment
-(`local` / `dev` / `staging` / `prod`) in `collections/http-client.env.json`, set your `token` and
-`apiKey`, and fire requests. Run them headlessly with `httpyac send collections/todos.http --all`.
+(`local` / `dev` / `staging` / `prod`) from `collections/http-client.env.json` and put your `token`
+(and `apiKey`) for that environment in the git-ignored `collections/http-client.private.env.json`
+(`task token` writes a local stub token there). Run headlessly with
+`httpyac send collections/todos.http --all --env local`.
 
 ## 3. Generate a client
 
@@ -62,6 +65,8 @@ contract, switching to the real endpoint later is just a base-URL change.
 
 - **Errors** are RFC 7807 `application/problem+json` with a `request_id` for support.
 - **Pagination** is cursor-based: pass the `next_cursor` from a page back as `cursor`.
-- **Idempotency:** send an `Idempotency-Key` header on creates to make retries safe.
+- **Idempotency:** send an `Idempotency-Key` header on creates to make retries safe. Replaying the
+  same key + body returns the original result; the same key with a different body is a `409`.
+- **Gateway errors** (401/403/413/429 and validator 400s) are also `problem+json` with CORS headers.
 - **Field naming** is `lower_snake_case` throughout.
 - **Versioning:** the base path is `/v1`; breaking changes ship under a new version.

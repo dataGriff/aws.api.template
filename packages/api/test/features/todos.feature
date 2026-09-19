@@ -18,10 +18,27 @@ Feature: Managing todos
     Then the response status is 200
     And the list contains at least 2 todos
 
-  Scenario: Tenant isolation hides other tenants' todos
+  # Tenant isolation is asserted on each axis independently so that dropping
+  # either predicate (tenant_id or user_sub) from the repository fails a test.
+  Scenario: The same user in another tenant cannot see the todo
     Given I have created a todo titled "Confidential"
-    When user "bob" in tenant "other" fetches that todo
+    When user "alice" in tenant "other" fetches that todo
     Then the response status is 404
+
+  Scenario: Another user in the same tenant cannot see the todo
+    Given I have created a todo titled "Confidential"
+    When user "bob" in tenant "acme" fetches that todo
+    Then the response status is 404
+
+  Scenario: Another user in the same tenant cannot modify or delete the todo
+    Given I have created a todo titled "Confidential"
+    When user "bob" in tenant "acme" updates that todo's title to "Hijacked"
+    Then the response status is 404
+    When user "bob" in tenant "acme" deletes that todo
+    Then the response status is 404
+    When I fetch that todo
+    Then the response status is 200
+    And the todo has title "Confidential"
 
   Scenario: Deleting a missing todo is a 404
     When I delete the todo "11111111-1111-1111-1111-111111111111"

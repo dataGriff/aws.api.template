@@ -15,14 +15,24 @@ export function isAdmin(auth: AuthContext): boolean {
 }
 
 // Group membership arrives under different shapes depending on the source:
-// Cognito populates `cognito:groups` automatically (an array in a raw token, a
-// bracketed/space-joined string once flattened by the API Gateway authorizer);
-// our pre-token trigger also adds a comma-joined `roles` claim. Read both and
-// normalise to a string array so authorization works in every context.
+// - `cognito:groups` is an array in a raw token, and a bracketed/space-joined
+//   string ("[admin ops]") once flattened by the API Gateway authorizer;
+// - our pre-token trigger adds a `roles` claim as a JSON-encoded array so group
+//   names containing commas or spaces survive the round trip intact.
+// Read every shape and normalise to a string array.
 function parseGroups(value: unknown): string[] {
   if (Array.isArray(value)) return value.map(String).filter(Boolean);
   if (typeof value !== "string") return [];
-  return value
+  const trimmed = value.trim();
+  if (trimmed.startsWith("[")) {
+    try {
+      const parsed: unknown = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean);
+    } catch {
+      // Not JSON — fall through to the gateway's "[a b]" flattening.
+    }
+  }
+  return trimmed
     .replace(/^\[|\]$/g, "")
     .split(/[,\s]+/)
     .filter(Boolean);

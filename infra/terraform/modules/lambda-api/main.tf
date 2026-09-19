@@ -1,4 +1,5 @@
 terraform {
+  required_version = ">= 1.9"
   required_providers {
     aws     = { source = "hashicorp/aws", version = ">= 5.60" }
     archive = { source = "hashicorp/archive", version = ">= 2.4" }
@@ -6,9 +7,13 @@ terraform {
 }
 
 data "aws_caller_identity" "current" {}
+data "aws_partition" "current" {}
 
 locals {
   account_id = data.aws_caller_identity.current.account_id
+  partition  = data.aws_partition.current.partition
+  # Reported by GET /health so a deploy can be verified end to end.
+  service_version = substr(data.archive_file.api.output_md5, 0, 12)
 }
 
 data "aws_iam_policy_document" "assume" {
@@ -29,7 +34,7 @@ resource "aws_iam_role" "lambda" {
 
 resource "aws_iam_role_policy_attachment" "vpc" {
   role       = aws_iam_role.lambda.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+  policy_arn = "arn:${local.partition}:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
 }
 
 data "aws_iam_policy_document" "app" {
@@ -38,17 +43,20 @@ data "aws_iam_policy_document" "app" {
     actions   = ["xray:PutTraceSegments", "xray:PutTelemetryRecords"]
     resources = ["*"]
   }
-  statement {
-    sid       = "ReadSecret"
-    actions   = ["secretsmanager:GetSecretValue"]
-    resources = [var.secret_arn]
+  dynamic "statement" {
+    for_each = var.secret_arn == null ? [] : [1]
+    content {
+      sid       = "ReadSecret"
+      actions   = ["secretsmanager:GetSecretValue"]
+      resources = [var.secret_arn]
+    }
   }
   dynamic "statement" {
     for_each = var.rds_proxy_resource_id == null ? [] : [1]
     content {
       sid       = "RdsIamConnect"
       actions   = ["rds-db:connect"]
-      resources = ["arn:aws:rds-db:${var.region}:${local.account_id}:dbuser:${var.rds_proxy_resource_id}/${var.db_user}"]
+      resources = ["arn:${local.partition}:rds-db:${var.region}:${local.account_id}:dbuser:${var.rds_proxy_resource_id}/${var.db_user}"]
     }
   }
   dynamic "statement" {
@@ -75,7 +83,8 @@ resource "aws_cloudwatch_log_group" "lambda" {
 data "archive_file" "api" {
   type        = "zip"
   source_file = "${var.dist_dir}/handler.js"
-  output_path = "${path.module}/.build/api.zip"
+  # Per-stack path so concurrent plans of two envs from one checkout don't clobber each other.
+  output_path = "${path.module}/.build/${var.name}-api.zip"
 }
 
 resource "aws_lambda_function" "api" {
@@ -89,6 +98,9 @@ resource "aws_lambda_function" "api" {
   memory_size      = var.memory_size
   architectures    = ["arm64"]
   publish          = true
+  # Caps how many connections a burst can open against the DB/proxy and stops
+  # this function starving the account's concurrency pool. -1 = unreserved.
+  reserved_concurrent_executions = var.reserved_concurrency
 
   vpc_config {
     subnet_ids         = var.subnet_ids
@@ -100,6 +112,7 @@ resource "aws_lambda_function" "api" {
   environment {
     variables = merge({
       APP_ENV                      = var.env
+      SERVICE_VERSION              = local.service_version
       NODE_OPTIONS                 = "--enable-source-maps"
       POWERTOOLS_SERVICE_NAME      = var.name
       POWERTOOLS_METRICS_NAMESPACE = var.name
@@ -109,7 +122,7 @@ resource "aws_lambda_function" "api" {
       DB_USER                      = var.db_user
       DB_SSL                       = "true"
       DB_IAM_AUTH                  = var.rds_proxy_resource_id == null ? "false" : "true"
-      DB_SECRET_ARN                = var.secret_arn
+      DB_SECRET_ARN                = var.secret_arn == null ? "" : var.secret_arn
       IDEMPOTENCY_TABLE            = var.idempotency_table_name == null ? "" : var.idempotency_table_name
     }, var.extra_environment)
   }

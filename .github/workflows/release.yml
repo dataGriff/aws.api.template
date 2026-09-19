@@ -5,10 +5,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: write # tags, releases, changelog commit
-  issues: write
-  pull-requests: write
-  id-token: write
+  contents: read
 
 concurrency:
   group: release
@@ -17,55 +14,76 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # tags, releases, changelog commit
+      issues: write
+      pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with: { fetch-depth: 0 }
-      - uses: jdx/mise-action@v2
+      - uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2.4.4
         with: { install: true, cache: true }
       - run: pnpm install --frozen-lockfile
+      # NOTE: @semantic-release/git pushes a changelog commit to main. If main is
+      # branch-protected, allow the GITHUB_TOKEN (or a deploy key/app token) to
+      # bypass the rule, or drop the git plugin from .releaserc.json.
       - name: Semantic release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: task release
 
   # Publish the generated consumer SDK when enabled and a registry token is set.
-  # Set packages/sdk publishConfig.registry and the package scope to your org
-  # first (see docs/consumer-guide). Version is taken from the tag semantic-release
-  # just created.
+  # Set NPM_REGISTRY (vars) / NPM_TOKEN (secrets) and the package scope to your
+  # org first (see docs/consumer-guide).
   publish-sdk:
     needs: release
     if: ${{ vars.PUBLISH_SDK == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions: { contents: read, packages: write }
+    env:
+      NPM_REGISTRY: ${{ vars.NPM_REGISTRY || 'https://registry.npmjs.org' }}
     steps:
-      - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
-      - uses: jdx/mise-action@v2
+      # The release job pushed a new commit + tag to main; check out main (not
+      # the triggering SHA) so the tag is reachable and `git describe` sees it.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with: { ref: main, fetch-depth: 0, persist-credentials: false }
+      - uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2.4.4
         with: { install: true, cache: true }
       - run: pnpm install --frozen-lockfile
-      - name: Publish SDK
+      - name: Configure registry auth
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          VERSION="$(git describe --tags --abbrev=0 | sed 's/^v//')"
+          host="${NPM_REGISTRY#https:}"
+          {
+            echo "@app:registry=${NPM_REGISTRY}"
+            echo "${host}/:_authToken=${NODE_AUTH_TOKEN}"
+          } >> "$HOME/.npmrc"
+      - name: Publish SDK
+        run: |
+          VERSION="$(git describe --tags --abbrev=0 --match 'v*' | sed 's/^v//')"
           task sdk:publish VERSION="$VERSION"
 
   docs:
     needs: release
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions: { contents: read, pages: write, id-token: write }
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with: { persist-credentials: false }
+      - uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2.4.4
         with: { install: true, cache: true }
       - run: pnpm install --frozen-lockfile
       - name: Build API reference
         run: task docs:api
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
+      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
         with: { path: docs/api-reference }
       - id: deploy
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5

@@ -4,8 +4,9 @@ import { injectLambdaContext } from "@aws-lambda-powertools/logger/middleware";
 import { captureLambdaHandler } from "@aws-lambda-powertools/tracer/middleware";
 import { logMetrics } from "@aws-lambda-powertools/metrics/middleware";
 import { MetricUnit } from "@aws-lambda-powertools/metrics";
-import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
+import type { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from "aws-lambda";
 import { dispatch } from "./router/index.js";
+import { bindLambdaContext } from "./idempotency.js";
 import { errorMapper } from "./middleware/error-mapper.js";
 import { logger, metrics, tracer } from "./observability.js";
 
@@ -23,5 +24,6 @@ export const handler = middy<APIGatewayProxyEvent, APIGatewayProxyResult>(base)
   .use(httpHeaderNormalizer())
   .use(injectLambdaContext(logger, { clearState: true }))
   .use(captureLambdaHandler(tracer))
-  .use(logMetrics(metrics))
+  .use(logMetrics(metrics, { captureColdStartMetric: true }))
+  .use({ before: (request) => bindLambdaContext(request.context as Context) })
   .use(errorMapper());

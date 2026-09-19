@@ -1,4 +1,5 @@
 terraform {
+  required_version = ">= 1.9"
   required_providers {
     aws = { source = "hashicorp/aws", version = ">= 5.60" }
   }
@@ -13,13 +14,18 @@ locals {
   })
 }
 
+data "aws_partition" "current" {}
+
 resource "aws_api_gateway_rest_api" "this" {
   name = var.name
   body = local.body
   endpoint_configuration {
     types = ["REGIONAL"]
   }
-  tags = var.tags
+  # With a custom domain in front, the default execute-api hostname is a second
+  # front door that bypasses the domain's TLS policy and base-path mapping.
+  disable_execute_api_endpoint = var.disable_execute_api_endpoint
+  tags                         = var.tags
 }
 
 resource "aws_lambda_permission" "apigw" {
@@ -66,10 +72,14 @@ resource "aws_iam_role" "cloudwatch" {
 
 resource "aws_iam_role_policy_attachment" "cloudwatch" {
   role       = aws_iam_role.cloudwatch.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+  policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
 }
 
+# ONE per account+region. Several stacks in the same account/region must not
+# all manage it (each apply would flip the role and a destroy would remove it
+# from under the others): set manage_account_settings = true in exactly one.
 resource "aws_api_gateway_account" "this" {
+  count               = var.manage_account_settings ? 1 : 0
   cloudwatch_role_arn = aws_iam_role.cloudwatch.arn
 }
 
@@ -81,13 +91,20 @@ resource "aws_api_gateway_stage" "this" {
   access_log_settings {
     destination_arn = aws_cloudwatch_log_group.access.arn
     format = jsonencode({
-      requestId        = "$context.requestId"
-      ip               = "$context.identity.sourceIp"
-      httpMethod       = "$context.httpMethod"
-      resourcePath     = "$context.resourcePath"
-      status           = "$context.status"
-      responseLatency  = "$context.responseLatency"
-      integrationError = "$context.integration.error"
+      requestId          = "$context.requestId"
+      ip                 = "$context.identity.sourceIp"
+      httpMethod         = "$context.httpMethod"
+      resourcePath       = "$context.resourcePath"
+      status             = "$context.status"
+      responseLatency    = "$context.responseLatency"
+      integrationLatency = "$context.integrationLatency"
+      integrationError   = "$context.integration.error"
+      # Why the gateway itself rejected a request (authorizer, validator, WAF, throttle).
+      errorType       = "$context.error.responseType"
+      errorMessage    = "$context.error.message"
+      authorizerError = "$context.authorizer.error"
+      apiKeyId        = "$context.identity.apiKeyId"
+      wafResponseCode = "$context.wafResponseCode"
     })
   }
   tags       = var.tags

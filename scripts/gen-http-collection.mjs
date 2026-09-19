@@ -114,17 +114,38 @@ for (const [path, item] of Object.entries(spec.paths)) {
 }
 
 for (const [tag, blocks] of groups) {
-  const header = `# ${tag} requests — generated from api/openapi.yaml by task gen. Do not edit.\n# Select an environment (local/dev/staging/prod) in http-client.env.json.\n\n`;
+  const header = `# ${tag} requests — generated from api/openapi.yaml by task gen. Do not edit.\n# Select an environment (local/dev/staging/prod) from http-client.env.json; tokens come\n# from the git-ignored http-client.private.env.json written by \`task token\`.\n\n`;
   writeFileSync(join(outDir, `${tag}.http`), header + blocks.join("\n\n") + "\n");
 }
 
-// Multi-environment variables. Non-secret defaults only; tokens are populated
-// by `task token`. baseUrl already includes the server's /v1 base path.
+// Every {{placeholder}} the requests reference (path params, non-defaulted
+// query params, header params) gets a runnable example value so the collection
+// works out of the box. Tokens/API keys are NOT stored here: `task token` writes
+// them to the git-ignored collections/http-client.private.env.json, which the
+// VS Code / JetBrains clients and httpyac merge over this file.
+const placeholders = {};
+for (const item of Object.values(spec.paths)) {
+  for (const method of ["get", "post", "put", "patch", "delete"]) {
+    const op = item[method];
+    if (!op) continue;
+    for (const p of [...(item.parameters ?? []), ...(op.parameters ?? [])].map(resolve)) {
+      if (p.in === "query" && p.schema?.default !== undefined) continue;
+      const name = p.name.replace(/-/g, "_");
+      // Opaque cursors are issued by the API; an empty value means "first page".
+      if (name.endsWith("cursor")) placeholders[name] ??= "";
+      else if (name === "idempotency_key") placeholders[name] ??= "replace-me-with-a-unique-key";
+      else placeholders[name] ??= example(p.schema) ?? "";
+    }
+  }
+}
+
+// Multi-environment variables. Non-secret defaults only. baseUrl already
+// includes the server's /v1 base path.
 const env = {
-  local: { baseUrl: `http://localhost:3000${base}`, apiKey: "local-dev-key", token: "" },
-  dev: { baseUrl: `https://dev.api.example.com${base}`, apiKey: "", token: "" },
-  staging: { baseUrl: `https://staging.api.example.com${base}`, apiKey: "", token: "" },
-  prod: { baseUrl: `https://api.example.com${base}`, apiKey: "", token: "" },
+  local: { baseUrl: `http://localhost:3000${base}`, apiKey: "local-dev-key", ...placeholders },
+  dev: { baseUrl: `https://dev.api.example.com${base}`, apiKey: "", ...placeholders },
+  staging: { baseUrl: `https://staging.api.example.com${base}`, apiKey: "", ...placeholders },
+  prod: { baseUrl: `https://api.example.com${base}`, apiKey: "", ...placeholders },
 };
 writeFileSync(join(outDir, "http-client.env.json"), JSON.stringify(env, null, 2) + "\n");
 

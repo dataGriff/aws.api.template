@@ -39,7 +39,31 @@ describe("extractAuth", () => {
     expect(isAdmin(auth)).toBe(true);
   });
 
-  it("reads groups from the trigger's comma-joined 'roles' claim", () => {
+  it("reads groups from the trigger's JSON-encoded 'roles' claim", () => {
+    const auth = extractAuth(
+      buildEvent({
+        method: "GET",
+        resource: "/todos",
+        claims: { sub: "u1", "custom:tenant_id": "t1", roles: JSON.stringify(["admin", "ops"]) },
+      }),
+    );
+    expect(auth.groups).toEqual(["admin", "ops"]);
+    expect(isAdmin(auth)).toBe(true);
+  });
+
+  it("preserves group names containing separators via the JSON roles claim", () => {
+    const auth = extractAuth(
+      buildEvent({
+        method: "GET",
+        resource: "/todos",
+        claims: { sub: "u1", "custom:tenant_id": "t1", roles: JSON.stringify(["sales,eu"]) },
+      }),
+    );
+    expect(auth.groups).toEqual(["sales,eu"]);
+    expect(isAdmin(auth)).toBe(false);
+  });
+
+  it("still accepts a legacy comma-joined 'roles' claim", () => {
     const auth = extractAuth(
       buildEvent({
         method: "GET",
@@ -47,8 +71,23 @@ describe("extractAuth", () => {
         claims: { sub: "u1", "custom:tenant_id": "t1", roles: "admin,ops" },
       }),
     );
-    expect(auth.groups).toContain("admin");
-    expect(isAdmin(auth)).toBe(true);
+    expect(auth.groups).toEqual(["admin", "ops"]);
+  });
+
+  it("merges cognito:groups and roles without duplicates", () => {
+    const auth = extractAuth(
+      buildEvent({
+        method: "GET",
+        resource: "/todos",
+        claims: {
+          sub: "u1",
+          "custom:tenant_id": "t1",
+          "cognito:groups": "[admin]",
+          roles: JSON.stringify(["admin", "ops"]),
+        },
+      }),
+    );
+    expect(auth.groups).toEqual(["admin", "ops"]);
   });
 
   it("rejects a token missing required claims", () => {
