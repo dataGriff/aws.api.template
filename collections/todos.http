@@ -1,0 +1,47 @@
+# todos requests — generated from api/openapi.yaml by task gen. Do not edit.
+# Select an environment (local/dev/staging/prod) from http-client.env.json; tokens come
+# from the git-ignored http-client.private.env.json written by `task token`.
+
+### list_todos — List the caller's todos
+# @name list_todos
+GET {{baseUrl}}/todos?limit=20&cursor={{cursor}}&status={{status}}
+Authorization: Bearer {{token}}
+x-api-key: {{apiKey}}
+
+### create_todo — Create a todo
+# @name create_todo
+POST {{baseUrl}}/todos
+Authorization: Bearer {{token}}
+x-api-key: {{apiKey}}
+idempotency-key: {{idempotency_key}}
+Content-Type: application/json
+
+{
+  "title": "string"
+}
+
+### get_todo — Get a todo by id
+# @name get_todo
+GET {{baseUrl}}/todos/{{todo_id}}
+Authorization: Bearer {{token}}
+x-api-key: {{apiKey}}
+
+### update_todo — Update a todo
+# @name update_todo
+PATCH {{baseUrl}}/todos/{{todo_id}}
+Authorization: Bearer {{token}}
+x-api-key: {{apiKey}}
+Content-Type: application/json
+
+{
+  "title": "string",
+  "description": "string",
+  "status": "open",
+  "due_date": "2026-01-01"
+}
+
+### delete_todo — Delete a todo
+# @name delete_todo
+DELETE {{baseUrl}}/todos/{{todo_id}}
+Authorization: Bearer {{token}}
+x-api-key: {{apiKey}}

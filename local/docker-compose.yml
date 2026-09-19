@@ -1,0 +1,41 @@
+name: aws-api-template-local
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  # Local Cognito emulator. Trigger fidelity is partial (see docs/local-dev);
+  # the local server falls back to a stub authorizer, so tests never depend on
+  # emulator quirks.
+  cognito-local:
+    image: jagregory/cognito-local:latest
+    ports:
+      - "9229:9229"
+    volumes:
+      - ./cognito-local:/app/.cognito
+
+  # Prism serves the contract as a mock — useful for consumer onboarding and as
+  # an early contract oracle before the real API is deployed.
+  prism:
+    image: stoplight/prism:5
+    command: ["mock", "-h", "0.0.0.0", "/openapi.yaml"]
+    ports:
+      - "4010:4010"
+    volumes:
+      - ../api/openapi.yaml:/openapi.yaml:ro
+
+volumes:
+  pgdata:

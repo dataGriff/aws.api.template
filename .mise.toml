@@ -1,0 +1,34 @@
+# Single source of truth for tool versions.
+# Local dev, git hooks, and GitHub Actions all run `mise install` then invoke
+# Taskfile targets — guaranteeing identical tooling everywhere.
+[tools]
+# Everything is pinned exactly for reproducibility (local == hooks == CI). Bumped via Renovate.
+node = "22.11.0"
+pnpm = "9.12.3" # keep in sync with package.json "packageManager"
+# python stays at minor precision: mise verifies GitHub artifact attestations for
+# its prebuilt python and only recent patch releases carry them, so an exact
+# older patch (e.g. 3.12.7) fails `mise install` and takes every pipx tool with it.
+python = "3.12"
+terraform = "1.9.8"
+task = "3.40.1"
+tflint = "0.64.0"
+trivy = "0.74.0"
+gitleaks = "8.30.1"
+infracost = "0.10.45"
+"ubi:oasdiff/oasdiff" = "1.32.1" # contract backward-compatibility gate (task contract:compat)
+lefthook = "2.1.14"
+# Redocly held on 1.x: v2 changed the config schema (redocly.yaml) and the
+# rendered docs output, which would break lint rules and the gen drift-gate.
+"npm:@redocly/cli" = "1.34.5"
+"npm:@stoplight/prism-cli" = "5.16.0"
+"npm:httpyac" = "6.16.7"
+# Schemathesis held on 3.x to match the CLI flags in scripts/schemathesis.sh.
+"pipx:schemathesis" = "3.39.16"
+"pipx:checkov" = "3.3.19"
+"pipx:semgrep" = "1.177.0"
+"pipx:harlequin" = "2.15.0"
+
+[env]
+# Loaded into the shell (and CI) for every task. Non-secret defaults only.
+APP_ENV = "local"
+AWS_REGION = "eu-west-2"

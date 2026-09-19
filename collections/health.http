@@ -1,0 +1,7 @@
+# health requests — generated from api/openapi.yaml by task gen. Do not edit.
+# Select an environment (local/dev/staging/prod) from http-client.env.json; tokens come
+# from the git-ignored http-client.private.env.json written by `task token`.
+
+### get_health — Liveness/readiness probe
+# @name get_health
+GET {{baseUrl}}/health

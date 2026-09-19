@@ -1,0 +1,7 @@
+**/generated/**
+docs/api-reference/**
+**/dist/**
+**/coverage/**
+pnpm-lock.yaml
+# Rendered by `task gen` (scripts/render-gateway-spec.mjs); its formatting is owned by the generator
+infra/terraform/modules/api-gateway/openapi.gateway.yaml

@@ -1,0 +1,9 @@
+output "api_invoke_url" { value = module.stack.api_invoke_url }
+output "cognito_user_pool_id" { value = module.stack.cognito_user_pool_id }
+output "cognito_app_client_id" { value = module.stack.cognito_app_client_id }
+output "cognito_test_client_id" { value = module.stack.cognito_test_client_id }
+output "cognito_issuer" { value = module.stack.cognito_issuer }
+output "api_key_id" { value = module.stack.api_key_id }
+output "egress_static_ip" { value = module.stack.egress_static_ip }
+output "ingress_static_ips" { value = module.stack.ingress_static_ips }
+output "custom_domain" { value = module.stack.custom_domain }

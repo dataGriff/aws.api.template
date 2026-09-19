@@ -1,0 +1,117 @@
+name: Deploy
+
+on:
+  # dev deploys only after the CI workflow has passed on main — never in a
+  # race with it. staging/prod are manual and gated by Environment protection.
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        options: [dev, staging, prod]
+        default: dev
+
+permissions:
+  id-token: write # OIDC — no long-lived AWS keys
+  contents: read
+
+# One apply per environment at a time; never cancel a running apply (that
+# orphans state), queue behind it instead.
+concurrency:
+  group: deploy-${{ github.event.inputs.environment || 'dev' }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # workflow_run: only a successful CI run of main itself may deploy (never a
+    # PR's head, even though the branches filter above already excludes them).
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # GitHub Environment protection rules gate staging/prod (configure in repo settings).
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+    env:
+      ENV: ${{ github.event.inputs.environment || 'dev' }}
+      AWS_REGION: ${{ vars.AWS_REGION || 'eu-west-2' }}
+      TF_DIR: infra/terraform/envs/${{ github.event.inputs.environment || 'dev' }}
+      # Inject remote-state backend config into `terraform init` (run by the task)
+      # so CI and local `task tf:apply` share the same code path.
+      TF_CLI_ARGS_init: -backend-config=bucket=${{ secrets.TF_STATE_BUCKET }} -backend-config=region=${{ vars.AWS_REGION || 'eu-west-2' }} -backend-config=kms_key_id=${{ secrets.TF_STATE_KMS_KEY_ARN }}
+    steps:
+      - name: Check required configuration
+        env:
+          TF_STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+          TF_STATE_KMS_KEY_ARN: ${{ secrets.TF_STATE_KMS_KEY_ARN }}
+          AWS_DEPLOY_ROLE_ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+        run: |
+          missing=""
+          [ -n "$TF_STATE_BUCKET" ] || missing="$missing TF_STATE_BUCKET"
+          [ -n "$TF_STATE_KMS_KEY_ARN" ] || missing="$missing TF_STATE_KMS_KEY_ARN"
+          [ -n "$AWS_DEPLOY_ROLE_ARN" ] || missing="$missing AWS_DEPLOY_ROLE_ARN"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing required secret(s):$missing — see docs/operations."
+            exit 1
+          fi
+
+      # Checks out main's current head (github.sha for a workflow_run is the
+      # default branch). With the per-env concurrency queue this is always the
+      # newest commit CI has passed or is about to re-validate.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3.6.3
+        with: { install: true, cache: true }
+
+      - run: pnpm install --frozen-lockfile
+
+      # Build the artifacts Terraform packages (Lambda bundles) and render the
+      # gateway spec — all from the contract. Runs BEFORE cloud credentials exist.
+      - run: task gen
+      - run: task build
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Apply infra via the same task local dev uses: plan to a file, then apply
+      # that exact plan (init picks up backend config from TF_CLI_ARGS_init).
+      - name: Terraform plan + apply
+        run: task tf:apply ENV="$ENV"
+
+      - name: Keep the applied plan as a record
+        if: ${{ always() }}
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: tfplan-${{ env.ENV }}-${{ github.run_id }}
+          path: ${{ env.TF_DIR }}/tfplan
+          if-no-files-found: ignore
+          retention-days: 30
+
+      # Migrations run after the apply and must therefore be backward-compatible
+      # with the version that was live (expand/contract). The DB is private, so
+      # provide MIGRATION_DATABASE_URL via an in-VPC path (bastion/tunnel/
+      # self-hosted runner). Skipped with a notice if absent.
+      - name: Run database migrations
+        env:
+          DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::warning::MIGRATION_DATABASE_URL not set — skipping migrations. See docs/operations."
+          else
+            task db:migrate
+          fi
+
+      # Post-deploy smoke test against the deployed stage: health, plus the API
+      # Gateway behaviours the local test layers cannot see (authorizer 401 as
+      # problem+json with CORS, gateway responses, preflight). Needs no Cognito user.
+      - name: Smoke test (health + gateway behaviour)
+        if: ${{ env.ENV != 'prod' }}
+        run: |
+          URL=$(terraform -chdir="$TF_DIR" output -raw api_invoke_url)
+          task smoke ENV="$ENV" URL="$URL"

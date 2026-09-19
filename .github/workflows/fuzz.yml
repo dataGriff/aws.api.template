@@ -1,0 +1,47 @@
+name: Fuzz (Schemathesis)
+
+on:
+  schedule:
+    - cron: "0 2 * * *" # nightly
+  workflow_dispatch:
+  # After a successful deploy (not on the push itself, which would fuzz the
+  # previous deployment with the new contract).
+  workflow_run:
+    workflows: [Deploy]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzz
+  cancel-in-progress: true
+
+jobs:
+  schemathesis:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3.6.3
+        with: { install: true, cache: true }
+      - run: pnpm install --frozen-lockfile
+
+      # Fuzz a deployed stage. API_URL + API_TOKEN (Cognito test user) + API_KEY
+      # come from repo secrets/vars. Skips with a notice if not configured.
+      - name: Schemathesis
+        env:
+          API_URL: ${{ vars.FUZZ_API_URL }}
+          API_TOKEN: ${{ secrets.FUZZ_API_TOKEN }}
+          API_KEY: ${{ secrets.FUZZ_API_KEY }}
+          SCHEMATHESIS_EXAMPLES: "50"
+        run: |
+          if [ -z "$API_URL" ]; then
+            echo "::warning::FUZZ_API_URL not set — skipping. See tests/schemathesis."
+          else
+            task test:fuzz
+          fi

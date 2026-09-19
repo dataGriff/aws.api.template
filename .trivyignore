@@ -1,0 +1,8 @@
+# Trivy IaC exceptions (documented, reviewed). Format: <ID> [exp:YYYY-MM-DD]
+
+# AWS-0104: unrestricted security-group egress.
+# Egress is now scoped (443/5432 inside the VPC + the DynamoDB gateway prefix
+# list). The one remaining 0.0.0.0/0 rule is the dynamic block on the Lambda SG
+# that only exists when enable_egress_static_ip = true (NAT for third-party
+# calls), which Trivy evaluates statically. Re-review when that flag changes.
+AWS-0104

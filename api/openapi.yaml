@@ -1,0 +1,430 @@
+openapi: 3.0.3
+info:
+  title: Todo API
+  version: 1.0.0
+  description: |
+    A multi-tenant Todo API — the worked example for the AWS API template.
+
+    Every request is authenticated with a Cognito-issued JWT. Todos are scoped to the caller's
+    tenant and user (from the token's `sub` and `custom:tenant_id` claims); the API never accepts a
+    client-supplied owner. This contract is the single source of truth: server types, gateway
+    request validation, the consumer SDK, the mock server, the `.http` collection, and the reference
+    docs are all generated from it.
+  contact:
+    name: API Platform
+    url: https://github.com/dataGriff/aws.api.template
+  license:
+    name: MIT
+    url: https://github.com/dataGriff/aws.api.template/blob/main/LICENSE
+servers:
+  - url: https://api.example.com/v1
+    description: Production (replace with your custom domain)
+  - url: http://localhost:3000/v1
+    description: Local
+tags:
+  - name: todos
+    description: Create and manage todos
+  - name: health
+    description: Service health
+
+security:
+  - cognito_jwt: []
+    api_key: []
+
+paths:
+  /health:
+    get:
+      operationId: get_health
+      summary: Liveness/readiness probe
+      tags: [health]
+      security: []
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/health_status"
+
+  /todos:
+    get:
+      operationId: list_todos
+      summary: List the caller's todos
+      tags: [todos]
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/status_filter"
+      responses:
+        "200":
+          description: A page of todos
+          headers:
+            x-request-id:
+              $ref: "#/components/headers/x_request_id"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/todo_page"
+        "400": { $ref: "#/components/responses/bad_request" }
+        "401": { $ref: "#/components/responses/unauthorized" }
+        "403": { $ref: "#/components/responses/forbidden" }
+        "429": { $ref: "#/components/responses/too_many_requests" }
+        "500": { $ref: "#/components/responses/internal_error" }
+    post:
+      operationId: create_todo
+      summary: Create a todo
+      tags: [todos]
+      parameters:
+        - $ref: "#/components/parameters/idempotency_key"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/todo_create"
+      responses:
+        "201":
+          description: Todo created
+          headers:
+            location:
+              description: URL of the created todo
+              schema: { type: string, format: uri-reference }
+            x-request-id:
+              $ref: "#/components/headers/x_request_id"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/todo"
+          # Links let tooling (Schemathesis stateful tests, SDK docs) follow a
+          # created todo into the by-id operations instead of guessing ids.
+          links:
+            get_todo: { $ref: "#/components/links/get_todo" }
+            update_todo: { $ref: "#/components/links/update_todo" }
+            delete_todo: { $ref: "#/components/links/delete_todo" }
+        "400": { $ref: "#/components/responses/bad_request" }
+        "401": { $ref: "#/components/responses/unauthorized" }
+        "403": { $ref: "#/components/responses/forbidden" }
+        "409": { $ref: "#/components/responses/conflict" }
+        "413": { $ref: "#/components/responses/payload_too_large" }
+        "422": { $ref: "#/components/responses/unprocessable_entity" }
+        "429": { $ref: "#/components/responses/too_many_requests" }
+        "500": { $ref: "#/components/responses/internal_error" }
+
+  /todos/{todo_id}:
+    parameters:
+      - $ref: "#/components/parameters/todo_id"
+    get:
+      operationId: get_todo
+      summary: Get a todo by id
+      tags: [todos]
+      responses:
+        "200":
+          description: The todo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/todo"
+        "400": { $ref: "#/components/responses/bad_request" }
+        "401": { $ref: "#/components/responses/unauthorized" }
+        "403": { $ref: "#/components/responses/forbidden" }
+        "404": { $ref: "#/components/responses/not_found" }
+        "429": { $ref: "#/components/responses/too_many_requests" }
+        "500": { $ref: "#/components/responses/internal_error" }
+    patch:
+      operationId: update_todo
+      summary: Update a todo
+      tags: [todos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/todo_update"
+      responses:
+        "200":
+          description: The updated todo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/todo"
+        "400": { $ref: "#/components/responses/bad_request" }
+        "401": { $ref: "#/components/responses/unauthorized" }
+        "403": { $ref: "#/components/responses/forbidden" }
+        "404": { $ref: "#/components/responses/not_found" }
+        "413": { $ref: "#/components/responses/payload_too_large" }
+        "422": { $ref: "#/components/responses/unprocessable_entity" }
+        "429": { $ref: "#/components/responses/too_many_requests" }
+        "500": { $ref: "#/components/responses/internal_error" }
+    delete:
+      operationId: delete_todo
+      summary: Delete a todo
+      tags: [todos]
+      responses:
+        "204":
+          description: Deleted
+        "400": { $ref: "#/components/responses/bad_request" }
+        "401": { $ref: "#/components/responses/unauthorized" }
+        "403": { $ref: "#/components/responses/forbidden" }
+        "404": { $ref: "#/components/responses/not_found" }
+        "429": { $ref: "#/components/responses/too_many_requests" }
+        "500": { $ref: "#/components/responses/internal_error" }
+
+components:
+  securitySchemes:
+    cognito_jwt:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: A Cognito-issued JWT access token.
+    api_key:
+      type: apiKey
+      in: header
+      name: x-api-key
+      description: Consumer API key (usage plans / quotas).
+
+  parameters:
+    todo_id:
+      name: todo_id
+      in: path
+      required: true
+      description: Unique todo identifier
+      schema:
+        type: string
+        format: uuid
+    limit:
+      name: limit
+      in: query
+      required: false
+      description: Maximum number of items to return
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    cursor:
+      name: cursor
+      in: query
+      required: false
+      description: Opaque pagination cursor returned as `next_cursor`
+      schema:
+        type: string
+        maxLength: 512
+    status_filter:
+      name: status
+      in: query
+      required: false
+      description: Filter by status
+      schema:
+        $ref: "#/components/schemas/todo_status"
+    idempotency_key:
+      name: idempotency-key
+      in: header
+      required: false
+      description: |
+        Client-supplied key to make creation idempotent. Replaying the same key with the same body
+        returns the original result; reusing it with a different body is rejected with 409.
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 128
+
+  links:
+    get_todo:
+      operationId: get_todo
+      parameters:
+        todo_id: $response.body#/todo_id
+    update_todo:
+      operationId: update_todo
+      parameters:
+        todo_id: $response.body#/todo_id
+    delete_todo:
+      operationId: delete_todo
+      parameters:
+        todo_id: $response.body#/todo_id
+
+  headers:
+    x_request_id:
+      description: Correlation id echoed for tracing
+      schema:
+        type: string
+
+  schemas:
+    health_status:
+      type: object
+      required: [status]
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        version:
+          type: string
+
+    todo_status:
+      type: string
+      description: Lifecycle state of a todo
+      enum: [open, in_progress, done]
+
+    todo:
+      type: object
+      required: [todo_id, title, status, created_at, updated_at]
+      additionalProperties: false
+      properties:
+        todo_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 2000
+          nullable: true
+        status:
+          $ref: "#/components/schemas/todo_status"
+        due_date:
+          type: string
+          format: date
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    todo_create:
+      type: object
+      required: [title]
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 2000
+          nullable: true
+        status:
+          $ref: "#/components/schemas/todo_status"
+        due_date:
+          type: string
+          format: date
+          nullable: true
+
+    todo_update:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 2000
+          nullable: true
+        status:
+          $ref: "#/components/schemas/todo_status"
+        due_date:
+          type: string
+          format: date
+          nullable: true
+
+    todo_page:
+      type: object
+      required: [items, next_cursor]
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/todo"
+        next_cursor:
+          type: string
+          nullable: true
+          description: Pass as `cursor` to fetch the next page; null when no more pages
+
+    problem:
+      type: object
+      description: RFC 7807 problem detail
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri-reference
+          default: about:blank
+        title:
+          type: string
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri-reference
+        request_id:
+          type: string
+        errors:
+          type: array
+          maxItems: 100
+          description: Field-level validation errors
+          items:
+            type: object
+            required: [field, message]
+            properties:
+              field: { type: string }
+              message: { type: string }
+
+  responses:
+    bad_request:
+      description: Malformed request
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/problem" }
+    unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/problem" }
+    forbidden:
+      description: Missing or invalid API key, or the key's usage plan does not cover this API
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/problem" }
+    payload_too_large:
+      description: Request body exceeds the gateway limit
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/problem" }
+    not_found:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/problem" }
+    conflict:
+      description: Idempotency conflict
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/problem" }
+    unprocessable_entity:
+      description: Semantic validation failed
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/problem" }
+    too_many_requests:
+      description: Rate limit or quota exceeded
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/problem" }
+    internal_error:
+      description: Unexpected error
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/problem" }

@@ -1,0 +1,18 @@
+# Git hooks delegate entirely to Taskfile targets, so hooks, local runs, and CI
+# execute the same code with the same (mise-pinned) tools. No inline commands here.
+pre-commit:
+  parallel: false
+  commands:
+    check:
+      run: task check
+
+pre-push:
+  parallel: false
+  commands:
+    ci:
+      run: task ci
+
+commit-msg:
+  commands:
+    conventional:
+      run: pnpm exec commitlint --edit {1}
