@@ -28,7 +28,11 @@ jobs:
       # NOTE: @semantic-release/git pushes a changelog commit to main. If main is
       # branch-protected, allow the GITHUB_TOKEN (or a deploy key/app token) to
       # bypass the rule, or drop the git plugin from .releaserc.json.
+      # semantic-release commits the changelog (and regenerated files) itself;
+      # the repo's pre-commit hook (task check) must not run inside that commit —
+      # its drift gate would see the release's own staged changes as stale.
       - name: Semantic release
         env:
+          LEFTHOOK: "0"
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: task release
