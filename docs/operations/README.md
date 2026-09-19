@@ -13,11 +13,11 @@ step that creates the backends the envs then use), so its state lives on disk in
 
 The backend names are **derived**, so you never pick a globally-unique bucket by hand:
 
-| Resource   | Name                                       |
-| ---------- | ------------------------------------------ |
+| Resource   | Name                                        |
+| ---------- | ------------------------------------------- |
 | State S3   | `<service_name>-tfstate-<env>-<account_id>` |
-| Lock table | `<service_name>-tflock-<env>`              |
-| KMS alias  | `alias/<service_name>-tfstate-<env>`       |
+| Lock table | `<service_name>-tflock-<env>`               |
+| KMS alias  | `alias/<service_name>-tfstate-<env>`        |
 
 `<service_name>` is your `service_name` (e.g. `todo-api`), the value in each env's `terraform.tfvars`.
 The deploy tasks recompute these exact names on every `init`, so there are **no state secrets** to copy
@@ -39,6 +39,7 @@ around.
   `GITHUB_REPOSITORY` **must** be your repo — the OIDC trust is scoped to
   `repo:<owner>/<repo>:environment:<env>`, so the wrong value means every deploy silently fails to
   assume the role.
+
 - **Wire the one secret into each GitHub Environment** — set the env's entry from the
   `deploy_role_arns` output (a map keyed by environment):
 
@@ -50,6 +51,7 @@ around.
 
   The `state_buckets` / `lock_tables` / `state_kms_aliases` outputs are printed for reference only —
   the deploy tasks derive them, so you don't set them anywhere.
+
 - **Deploy locally** (optional): with AWS credentials for the account (e.g. `aws sso login` then
   `export AWS_PROFILE=…`), just `task tf:plan ENV=dev` — it reads `service_name` from that env's
   `terraform.tfvars` and resolves the account id itself. The **target account is whatever your active
