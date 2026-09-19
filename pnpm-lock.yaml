@@ -86,9 +86,6 @@ importers:
       '@aws-sdk/util-dynamodb':
         specifier: ^3.679.0
         version: 3.996.9(@aws-sdk/client-dynamodb@3.1134.0)
-      '@datagriff/todo-api-contract':
-        specifier: ^1.0.0
-        version: link:../../../aws.contract.template
       '@middy/core':
         specifier: ^5.5.1
         version: 5.5.1

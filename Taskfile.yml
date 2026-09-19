@@ -98,8 +98,11 @@ tasks:
         msg: "No built package at {{.CONTRACT_DIR}} — run `task build` there first."
     dir: packages/api
     cmds:
-      # `pnpm link` is per package (no --filter): symlinks node_modules only, package.json is untouched.
+      # `pnpm link` is per package (no --filter) and leaves package.json alone, but
+      # it records a machine-specific `link:` path in the lockfile — restore it so
+      # the link can never be committed.
       - pnpm link "$(cd ../.. && realpath {{.CONTRACT_DIR}})"
+      - git -C ../.. checkout -- pnpm-lock.yaml
   contract:unlink:
     desc: Back to the registry version of the contract package
     dir: packages/api
