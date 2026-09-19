@@ -1,6 +1,10 @@
 region       = "eu-west-2"
 service_name = "todo-api"
 
+# Safety guard: Terraform refuses to run if your active AWS credentials point at a
+# different account. Update when this env moves to its own account.
+allowed_account_ids = ["018648229057"]
+
 # Cheapest representative setup for dev.
 db_engine                = "rds"
 enable_rds_proxy         = true

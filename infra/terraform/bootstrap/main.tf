@@ -10,11 +10,21 @@ provider "aws" {
   region = var.region
 }
 
+data "aws_caller_identity" "current" {}
+
+# One isolated state backend per environment: its own S3 bucket, KMS key and
+# lock table, named <service>-tfstate-<env>-<account> / <service>-tflock-<env> /
+# alias/<service>-tfstate-<env>. Deriving the names means a deploy only needs the
+# service + env (no hand-picked globally-unique bucket), and each env's deploy
+# role is scoped to ONLY its own backend below — dev cannot read or write
+# staging/prod state.
 module "backend" {
   source       = "../modules/tf-backend"
-  state_bucket = var.state_bucket
-  lock_table   = var.lock_table
-  tags         = { ManagedBy = "terraform", Purpose = "tf-backend" }
+  for_each     = toset(var.deploy_environments)
+  state_bucket = "${var.service_name}-tfstate-${each.key}-${data.aws_caller_identity.current.account_id}"
+  lock_table   = "${var.service_name}-tflock-${each.key}"
+  kms_alias    = "${var.service_name}-tfstate-${each.key}"
+  tags         = { ManagedBy = "terraform", Purpose = "tf-backend", Environment = each.key }
 }
 
 # --- GitHub Actions OIDC: the deploy trust boundary, in code ------------------
@@ -74,23 +84,25 @@ resource "aws_iam_role_policy_attachment" "deploy" {
   policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/AdministratorAccess"
 }
 
-# The state bucket is shared by all envs; every deploy role needs it.
+# Each env's deploy role can touch ONLY its own env's state backend (bucket,
+# lock table and KMS key). This is the isolation the per-env split buys us.
 data "aws_iam_policy_document" "state_access" {
+  for_each = aws_iam_role.deploy
   statement {
     actions   = ["s3:ListBucket"]
-    resources = [module.backend.state_bucket_arn]
+    resources = [module.backend[each.key].state_bucket_arn]
   }
   statement {
     actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
-    resources = ["${module.backend.state_bucket_arn}/*"]
+    resources = ["${module.backend[each.key].state_bucket_arn}/*"]
   }
   statement {
     actions   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:DeleteItem"]
-    resources = [module.backend.lock_table_arn]
+    resources = [module.backend[each.key].lock_table_arn]
   }
   statement {
     actions   = ["kms:Encrypt", "kms:Decrypt", "kms:GenerateDataKey"]
-    resources = [module.backend.kms_key_arn]
+    resources = [module.backend[each.key].kms_key_arn]
   }
 }
 
@@ -98,20 +110,17 @@ resource "aws_iam_role_policy" "state_access" {
   for_each = aws_iam_role.deploy
   name     = "terraform-state"
   role     = each.value.id
-  policy   = data.aws_iam_policy_document.state_access.json
+  policy   = data.aws_iam_policy_document.state_access[each.key].json
 }
 
 variable "region" {
   type    = string
   default = "eu-west-2"
 }
-variable "state_bucket" {
+variable "service_name" {
   type        = string
-  description = "Globally-unique S3 bucket name for Terraform state"
-}
-variable "lock_table" {
-  type    = string
-  default = "terraform-locks"
+  default     = "todo-api"
+  description = "Base name for the per-env state backends (must match the envs' service_name). Bucket/lock/KMS-alias names are derived from it, so no globally-unique bucket name is chosen by hand."
 }
 variable "create_github_oidc" {
   type        = bool
@@ -136,10 +145,12 @@ variable "tags" {
   default = { ManagedBy = "terraform", Purpose = "tf-bootstrap" }
 }
 
-output "state_bucket" { value = module.backend.state_bucket }
-output "lock_table" { value = module.backend.lock_table }
-output "state_kms_key_arn" { value = module.backend.kms_key_arn }
+# Names are derived and recomputed by the deploy tasks — these outputs are for
+# reference/verification, not something you copy into GitHub secrets.
+output "state_buckets" { value = { for k, m in module.backend : k => m.state_bucket } }
+output "lock_tables" { value = { for k, m in module.backend : k => m.lock_table } }
+output "state_kms_aliases" { value = { for k, m in module.backend : k => m.kms_alias } }
 output "deploy_role_arns" {
-  description = "Set each as AWS_DEPLOY_ROLE_ARN on the matching GitHub Environment"
+  description = "Set each env's value as AWS_DEPLOY_ROLE_ARN on the matching GitHub Environment (the only per-env secret needed)"
   value       = { for k, r in aws_iam_role.deploy : k => r.arn }
 }
