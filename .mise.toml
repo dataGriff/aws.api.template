@@ -5,7 +5,10 @@
 # Everything is pinned exactly for reproducibility (local == hooks == CI). Bumped via Renovate.
 node = "22.11.0"
 pnpm = "9.12.3" # keep in sync with package.json "packageManager"
-python = "3.12.7"
+# python stays at minor precision: mise verifies GitHub artifact attestations for
+# its prebuilt python and only recent patch releases carry them, so an exact
+# older patch (e.g. 3.12.7) fails `mise install` and takes every pipx tool with it.
+python = "3.12"
 terraform = "1.9.8"
 task = "3.40.1"
 tflint = "0.64.0"
