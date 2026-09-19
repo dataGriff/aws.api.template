@@ -18,17 +18,11 @@ variable "pinning_threshold" {
   type    = number
   default = 5
 }
-variable "alarm_email" {
+variable "alarm_topic_arn" {
   type        = string
-  default     = null
-  description = "Email to subscribe to the alarm SNS topic (must confirm once)"
+  description = "The platform's alarm SNS topic every alarm here publishes to"
 }
 variable "tags" {
   type    = map(string)
   default = {}
-}
-variable "kms_key_arn" {
-  type        = string
-  default     = null
-  description = "CMK for the alarm topic (policy must allow cloudwatch.amazonaws.com)"
 }

@@ -1,4 +1,4 @@
-import type { TodoCreate } from "@app/contracts";
+import type { TodoCreate } from "@datagriff/todo-api-contract/types";
 import type { Context } from "aws-lambda";
 import type { AuthContext } from "./auth/claims.js";
 import { getConfig } from "./config.js";

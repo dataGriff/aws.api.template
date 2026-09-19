@@ -5,23 +5,8 @@ terraform {
   }
 }
 
-# Encrypted with a CMK whose policy lets cloudwatch.amazonaws.com publish
-# (the AWS-managed aws/sns key cannot be used by CloudWatch alarms).
-resource "aws_sns_topic" "alarms" {
-  name              = "${var.name}-alarms"
-  kms_master_key_id = var.kms_key_arn
-  tags              = var.tags
-}
-
-# Optional email subscription so alarms actually page someone. Provide
-# alarm_email to enable; the address must confirm the subscription once.
-resource "aws_sns_topic_subscription" "email" {
-  count     = var.alarm_email == null ? 0 : 1
-  topic_arn = aws_sns_topic.alarms.arn
-  protocol  = "email"
-  endpoint  = var.alarm_email
-}
-
+# Alarms publish to the platform's shared topic (published at
+# /platform/<env>/alarms/topic_arn); subscriptions live there.
 resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
   alarm_name          = "${var.name}-lambda-errors"
   namespace           = "AWS/Lambda"
@@ -32,7 +17,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
   evaluation_periods  = 5
   threshold           = var.error_threshold
   comparison_operator = "GreaterThanThreshold"
-  alarm_actions       = [aws_sns_topic.alarms.arn]
+  alarm_actions       = [var.alarm_topic_arn]
   treat_missing_data  = "notBreaching"
   tags                = var.tags
 }
@@ -47,7 +32,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_throttles" {
   evaluation_periods  = 5
   threshold           = 1
   comparison_operator = "GreaterThanThreshold"
-  alarm_actions       = [aws_sns_topic.alarms.arn]
+  alarm_actions       = [var.alarm_topic_arn]
   treat_missing_data  = "notBreaching"
   tags                = var.tags
 }
@@ -62,7 +47,7 @@ resource "aws_cloudwatch_metric_alarm" "api_5xx" {
   evaluation_periods  = 5
   threshold           = var.error_threshold
   comparison_operator = "GreaterThanThreshold"
-  alarm_actions       = [aws_sns_topic.alarms.arn]
+  alarm_actions       = [var.alarm_topic_arn]
   treat_missing_data  = "notBreaching"
   tags                = var.tags
 }
@@ -77,7 +62,7 @@ resource "aws_cloudwatch_metric_alarm" "api_latency" {
   evaluation_periods  = 5
   threshold           = var.latency_p99_ms
   comparison_operator = "GreaterThanThreshold"
-  alarm_actions       = [aws_sns_topic.alarms.arn]
+  alarm_actions       = [var.alarm_topic_arn]
   treat_missing_data  = "notBreaching"
   tags                = var.tags
 }
@@ -94,7 +79,7 @@ resource "aws_cloudwatch_metric_alarm" "db_pinning" {
   evaluation_periods  = 3
   threshold           = var.pinning_threshold
   comparison_operator = "GreaterThanThreshold"
-  alarm_actions       = [aws_sns_topic.alarms.arn]
+  alarm_actions       = [var.alarm_topic_arn]
   treat_missing_data  = "notBreaching"
   tags                = var.tags
 }

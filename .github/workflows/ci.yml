@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  packages: read # install @datagriff/todo-api-contract
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -29,23 +30,32 @@ jobs:
           install: true
           cache: true
 
+      # The contract package lives on GitHub Packages. A package published from
+      # another repo is readable by this repo's GITHUB_TOKEN only once the
+      # package grants it access (aws.contract.template docs/operations);
+      # PACKAGES_READ_TOKEN (a PAT with read:packages) is the fallback.
+      - name: Configure registry auth
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN || secrets.GITHUB_TOKEN }}
+        run: echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" >> "$HOME/.npmrc"
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       # The gates below are exactly the sub-tasks of `task ci` (what the pre-push
       # hook runs), one step each so the Actions UI shows which gate failed and
       # its log is collapsible on its own. Every gate fails on findings.
-      - name: "check: format, lint, typecheck, spec lint, contract compat, gen drift, secrets, unit"
+      - name: "check: format, lint, typecheck, gen drift, secrets, unit"
         run: task check
-      - name: "build: Lambda bundles + SDK"
+      - name: "build: Lambda bundle"
         run: task build
       - name: "test: integration (real Postgres via testcontainers)"
         run: task test:integration
       - name: "test: BDD acceptance scenarios"
         run: task test:bdd
-      - name: "test: contract over HTTP (Schemathesis provider + SDK consumer + .http collection)"
+      - name: "test: contract over HTTP (Schemathesis provider + published client + .http collection)"
         run: task test:contract
-      - name: "terraform: fmt, validate (all envs), tflint, terraform test (guardrails)"
+      - name: "terraform: fmt, validate (all envs), tflint, terraform test (guardrails + platform interface)"
         run: task tf:validate
       - name: "terraform: security scan (trivy + checkov)"
         run: task tf:scan

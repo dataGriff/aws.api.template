@@ -5,14 +5,7 @@ import security from "eslint-plugin-security";
 
 export default tseslint.config(
   {
-    ignores: [
-      "**/dist/**",
-      "**/coverage/**",
-      "**/generated/**",
-      "docs/api-reference/**",
-      "**/.terraform/**",
-      "**/kubb.config.ts",
-    ],
+    ignores: ["**/dist/**", "**/coverage/**", "**/.terraform/**"],
   },
   js.configs.recommended,
   security.configs.recommended,

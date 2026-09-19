@@ -5,7 +5,8 @@
 # mint one with `task token` locally, or a Cognito test user in CI.
 set -euo pipefail
 
-SCHEMA="${SCHEMA:-api/openapi.yaml}"
+# The contract is the installed @datagriff/todo-api-contract package.
+SCHEMA="${SCHEMA:-$(node "$(dirname "$0")/contract-path.mjs")}"
 API_URL="${API_URL:-http://localhost:3000/v1}"
 MAX_EXAMPLES="${SCHEMATHESIS_EXAMPLES:-25}"
 

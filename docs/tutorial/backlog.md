@@ -26,18 +26,19 @@ Problem: newcomers and agents need a map without a monolithic README.
 Acceptance: `docs/` fan-out exists; `AGENTS.md` is light and points into `docs/`; `CLAUDE.md`
 references `@AGENTS.md`. Effort: **S**
 
-## Epic 2 — Contract & codegen
+## Epic 2 — Consume the contract package
 
-**T2.1 Author the OpenAPI contract**
-Problem: without a single source of truth, server/client/docs drift.
-Acceptance: `api/openapi.yaml` defines the API with `lower_snake_case`, RFC 7807 errors, cursor
-pagination, idempotency, `/v1`, and security schemes; `task spec:lint` is clean and rejects camelCase.
-Effort: **M**
+**T2.1 Pin the contract**
+Problem: the API's surface must be the published contract, not a copy of it.
+Acceptance: `packages/api` depends on `@datagriff/todo-api-contract` (GitHub Packages, `.npmrc`
+scope mapping, registry auth in CI); `scripts/lib/contract.mjs` resolves the installed spec;
+`task contract:bump` / `contract:link` exist. Effort: **S**
 
-**T2.2 Generate code, SDK, mock, docs, .http**
-Problem: hand-written types/clients rot.
-Acceptance: `task gen` produces zod+types, the consumer SDK, the `.http` collection + env file, and the
-Redocly reference; `task gen:check` fails on drift in CI. Effort: **M**
+**T2.2 Render the gateway spec**
+Problem: API Gateway needs AWS extensions the portable contract must not carry.
+Acceptance: `task gen` renders `openapi.gateway.yaml` from the installed contract (integrations,
+validators, Cognito authorizer, CORS, problem+json gateway responses); `task gen:check` fails on
+drift in CI; the route table is held to the contract by a unit test. Effort: **M**
 
 ## Epic 3 — Lambda service
 
@@ -56,34 +57,36 @@ Problem: Lambda exhausts DB connections; creates must be safe to retry.
 Acceptance: cached pool via RDS Proxy IAM auth or Secrets Manager; create is idempotent when a table is
 configured; migrations run out-of-band. Effort: **M**
 
-**T3.4 Cognito custom claims**
-Problem: the API authorizes on claims that must exist on the token.
-Acceptance: pre-token trigger adds `custom:tenant_id` + roles to the access token; unit-tested with
-sample events. Effort: **S**
+**T3.4 Claims from the platform pool**
+Problem: the API authorizes on claims the platform's pre-token trigger puts on the token.
+Acceptance: `auth/claims.ts` reads `custom:tenant_id` / roles from the authorizer context;
+unit-tested with sample events (the trigger itself is the platform's). Effort: **S**
 
-## Epic 4 — Terraform
+## Epic 4 — Terraform: the API stack on the platform
 
-**T4.1 Core stack**
-Problem: the API needs reproducible infra.
-Acceptance: modules for network, database, cognito, lambda, api-gateway (from the rendered contract),
-observability compose into a `stack`; `dev/staging/prod` validate. Effort: **L**
+**T4.1 Platform module**
+Problem: the stack needs the platform's VPC, keys, pool, topic without coupling to its state.
+Acceptance: `modules/platform` reads `/platform/<env>/…` SSM parameters (required + flag-gated
+optional), unwraps them, and the stack refuses another `interface/version`. Effort: **M**
 
-**T4.2 Opt-in flags**
-Problem: WAF, static IPs, custom DNS, and DB engine must be toggleable without forking.
-Acceptance: `enable_waf`, `enable_rds_proxy`, `enable_egress_static_ip`, `enable_ingress_static_ip`,
-`custom_domain_enabled`, `db_engine` flip cleanly; `terraform plan` clean; preconditions guard bad
-combos. Effort: **M**
+**T4.2 Core stack**
+Problem: the API needs reproducible infra of its own.
+Acceptance: database, rds-proxy, secrets, lambda-api, api-gateway (from the rendered contract),
+observability (alarms into the platform topic) compose into a `stack`; `dev/staging/prod`
+validate; the deploy role and state backend come from the platform bootstrap. Effort: **L**
 
-**T4.3 Remote state + alerting**
-Problem: state must be shared and failures must page someone.
-Acceptance: S3+DynamoDB backend bootstrap; SNS alarms (errors, 5xx, latency, throttles, RDS pinning)
-with optional email + budget alarm. Effort: **M**
+**T4.3 Opt-in flags**
+Problem: WAF attachment, a hostname and the DB engine must be toggleable without forking.
+Acceptance: `enable_waf` (platform ACL association), `custom_domain_enabled`
+(`<service>.<base_domain>` with the platform certificate), `enable_rds_proxy`, `db_engine` flip
+cleanly; missing platform features fail at plan. Effort: **M**
 
 ## Epic 5 — Tests
 
 **T5.1 Unit + contract**
-Acceptance: vitest covers domain, claims, error mapping, trigger; responses conform to generated
-schemas. Effort: **M**
+Acceptance: vitest covers domain, claims, error mapping, the gateway renderer; the contract layer
+runs Schemathesis, the published client and the shipped collection against the local server from
+the pinned package. Effort: **M**
 
 **T5.2 Integration + BDD**
 Acceptance: testcontainers Postgres integration; cucumber-js scenarios (the acceptance criteria) pass.
@@ -96,8 +99,8 @@ violations. Effort: **S**
 ## Epic 6 — Local dev
 
 **T6.1 Local stack + server**
-Acceptance: `task up` starts Postgres/cognito-local/Prism; `task serve` runs the real handler; `task
-token` makes `.http` requests runnable. Effort: **M**
+Acceptance: `task up` starts Postgres/cognito-local; `task serve` runs the real handler; `task http`
+fires the package's `.http` collection with a stub token. Effort: **M**
 
 **T6.2 SQL ergonomics**
 Acceptance: `task db:query -- <name>` runs example queries; `task db:console` opens Harlequin. Effort:
@@ -109,8 +112,8 @@ Acceptance: `task db:query -- <name>` runs example queries; `task db:console` op
 Acceptance: `ci.yml` runs `task ci`; `security.yml` runs scanners + SBOM. Effort: **M**
 
 **T7.2 Deploy (OIDC) + release**
-Acceptance: `deploy.yml` assumes an OIDC role, applies Terraform per env, migrates, smoke-tests;
-`release.yml` versions, publishes SDK, deploys docs to Pages. Effort: **L**
+Acceptance: `deploy.yml` assumes the service's platform-issued OIDC role, applies Terraform per
+env, migrates, smoke-tests; `release.yml` versions and tags. Effort: **L**
 
 ## Epic 8 — Docs & reuse
 
@@ -118,6 +121,6 @@ Acceptance: `deploy.yml` assumes an OIDC role, applies Terraform per env, migrat
 Acceptance: tutorial (this backlog), consumer guide, architecture, operations, security, testing,
 local-dev are populated and linked from the README. Effort: **M**
 
-**T8.2 adopt-contract skill**
-Acceptance: `.claude/skills/adopt-contract` walks from Todo to a new contract and ends with `task ci`
-green. Effort: **M**
+**T8.2 adopt-api skill**
+Acceptance: `.claude/skills/adopt-api` walks from Todo to your own (published) contract and ends
+with `task ci` green. Effort: **M**

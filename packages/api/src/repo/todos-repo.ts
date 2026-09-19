@@ -1,4 +1,4 @@
-import type { Todo, TodoCreate, TodoStatus, TodoUpdate } from "@app/contracts";
+import type { Todo, TodoCreate, TodoStatus, TodoUpdate } from "@datagriff/todo-api-contract/types";
 import { z } from "zod";
 import type { AuthContext } from "../auth/claims.js";
 import { query } from "../db/pool.js";

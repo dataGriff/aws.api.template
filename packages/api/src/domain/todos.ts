@@ -1,4 +1,4 @@
-import type { Todo, TodoCreate, TodoUpdate } from "@app/contracts";
+import type { Todo, TodoCreate, TodoUpdate } from "@datagriff/todo-api-contract/types";
 import type { AuthContext } from "../auth/claims.js";
 import { NotFoundError } from "../errors.js";
 import * as repo from "../repo/todos-repo.js";

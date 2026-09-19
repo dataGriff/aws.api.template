@@ -26,11 +26,6 @@ variable "disable_execute_api_endpoint" {
   type    = bool
   default = false
 }
-variable "manage_account_settings" {
-  type        = bool
-  default     = true
-  description = "Manage the account-level API Gateway CloudWatch role (one stack per account+region)."
-}
 variable "log_retention_days" {
   type    = number
   default = 365
