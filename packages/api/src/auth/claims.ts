@@ -46,17 +46,16 @@ function parseGroups(value: unknown): string[] {
 // cognito:groups arrives flattened to a string through the authorizer, so it is
 // read leniently rather than through the schema's array type.
 export function extractAuth(event: APIGatewayProxyEvent): AuthContext {
-  const raw = event.requestContext.authorizer?.claims as Record<string, unknown> | undefined;
+  const { "cognito:groups": rawGroups, ...claims } = (event.requestContext.authorizer?.claims ??
+    {}) as Record<string, unknown>;
 
-  const parsed = schemas.accessTokenClaimsSchema
-    .omit({ "cognito:groups": true })
-    .safeParse(raw ?? {});
+  const parsed = schemas.accessTokenClaimsSchema.safeParse(claims);
   if (!parsed.success) {
     throw new UnauthorizedError("Token is missing required claims");
   }
   const { sub: userSub, "custom:tenant_id": tenantId, roles } = parsed.data;
 
-  const groups = [...new Set([...parseGroups(raw?.["cognito:groups"]), ...parseGroups(roles)])];
+  const groups = [...new Set([...parseGroups(rawGroups), ...parseGroups(roles)])];
 
   return { userSub, tenantId, groups };
 }
