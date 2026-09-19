@@ -1,7 +1,9 @@
-// Consumer-side contract conformance: drive the GENERATED SDK (the artifact
-// consumers install) through every operation against the running local server
-// and check each response with the generated zod schemas. This proves both
-// halves of the contract agree — provider responses and consumer client.
+// Consumer-side contract conformance: drive the GENERATED SDK through every
+// operation against the running local server and check each response with the
+// generated zod schemas. This proves both halves of the contract agree —
+// provider responses and consumer client. (Inside the workspace @app/sdk
+// resolves to its source; `task test:contract` also builds the package and
+// loads the published dist entry points so the shipped artifact is checked.)
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { schemas } from "@app/contracts";

@@ -144,8 +144,12 @@ tasks:
   test:contract:
     desc: "Contract tests over real HTTP against local/server.ts + throwaway Postgres (Docker): Schemathesis provider conformance, generated-SDK consumer conformance, .http collection replay"
     cmds:
-      # The consumer test imports the SDK exactly as a consumer would (its built dist).
+      # Inside the workspace @app/sdk resolves to its source (publishConfig
+      # switches to dist on publish), so build the package and load BOTH
+      # published entry points once to prove the shipped artifact is importable.
       - pnpm --filter @app/sdk build
+      - node -e "import('./packages/sdk/dist/index.js').then(m => { if (typeof m.createClient !== 'function') throw new Error('ESM build lacks createClient') })"
+      - node -e "const m = require('./packages/sdk/dist/index.cjs'); if (typeof m.createClient !== 'function') throw new Error('CJS build lacks createClient')"
       # Orchestrated by packages/api/test/contract/run.ts: container, migrations,
       # server on a free loopback port, stub token, schemathesis, SDK, httpyac, teardown.
       - pnpm --filter @app/api test:contract
