@@ -50,8 +50,12 @@ around.
 
   The `state_buckets` / `lock_tables` / `state_kms_aliases` outputs are printed for reference only —
   the deploy tasks derive them, so you don't set them anywhere.
-- **Deploy locally** (optional): with AWS credentials for the account, just `task tf:plan ENV=dev` — it
-  reads `service_name` from that env's `terraform.tfvars` and resolves the account id itself.
+- **Deploy locally** (optional): with AWS credentials for the account (e.g. `aws sso login` then
+  `export AWS_PROFILE=…`), just `task tf:plan ENV=dev` — it reads `service_name` from that env's
+  `terraform.tfvars` and resolves the account id itself. The **target account is whatever your active
+  credentials resolve to** (`aws sts get-caller-identity`), so set `allowed_account_ids` in each env's
+  `terraform.tfvars` to make Terraform hard-fail if the wrong profile is active. In CI there is no
+  login — `deploy.yml` assumes `AWS_DEPLOY_ROLE_ARN` via OIDC, and the account is the one in that ARN.
 
 ## Deploy
 

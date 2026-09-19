@@ -6,6 +6,11 @@ variable "service_name" {
   type    = string
   default = "todo-api"
 }
+variable "allowed_account_ids" {
+  type        = list(string)
+  default     = []
+  description = "Safety guard: if non-empty, Terraform refuses to run against any AWS account not in this list, so a wrong active profile can't deploy to the wrong account. Set it to this env's account id in terraform.tfvars."
+}
 variable "db_engine" {
   type    = string
   default = "rds"

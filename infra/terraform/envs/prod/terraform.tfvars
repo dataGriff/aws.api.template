@@ -1,6 +1,10 @@
 region       = "eu-west-2"
 service_name = "todo-api"
 
+# Safety guard — strongly recommended in prod: set THIS env's account id so a wrong
+# active AWS profile can never apply prod into the wrong account.
+# allowed_account_ids = ["123456789012"]
+
 # Production sizing. The stack REFUSES to plan prod without: alarm_email, an
 # explicit cors_origin, https callback/logout URLs, db_multi_az = true and
 # deletion_protection (see infra/terraform/stack/variables.tf validations).
