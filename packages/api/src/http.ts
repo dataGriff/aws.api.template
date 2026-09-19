@@ -42,5 +42,30 @@ export function validate<T>(schema: z.ZodTypeAny, value: unknown): T {
       result.error.issues.map((i) => ({ field: i.path.join(".") || "(root)", message: i.message })),
     );
   }
+  const nul = findNul(result.data);
+  if (nul) {
+    throw new BadRequestError("Request validation failed", [
+      { field: nul, message: "must not contain NUL (\\u0000) characters" },
+    ]);
+  }
   return result.data as T;
+}
+
+// Postgres text columns cannot store U+0000 (it fails with "invalid byte
+// sequence for encoding UTF8"), and JSON Schema has no way to express that.
+// Reject it up front as a validation error instead of surfacing a 500.
+function findNul(value: unknown, path = ""): string | undefined {
+  if (typeof value === "string") return value.includes("\u0000") ? path || "(root)" : undefined;
+  if (Array.isArray(value)) {
+    for (const [i, item] of value.entries()) {
+      const hit = findNul(item, `${path}[${i}]`);
+      if (hit) return hit;
+    }
+  } else if (value && typeof value === "object") {
+    for (const [key, item] of Object.entries(value)) {
+      const hit = findNul(item, path ? `${path}.${key}` : key);
+      if (hit) return hit;
+    }
+  }
+  return undefined;
 }

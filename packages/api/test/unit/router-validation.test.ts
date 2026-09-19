@@ -69,6 +69,26 @@ describe("PATCH body validation (contract: minProperties 1)", () => {
   });
 });
 
+describe("NUL characters (Postgres cannot store U+0000)", () => {
+  it("rejects a body string containing \\u0000 with 400 instead of a database 500", async () => {
+    const res = await invoke({ method: "POST", resource: "/todos", body: { title: "a\u0000b" } });
+    expect(res.statusCode).toBe(400);
+    expect((parse(res) as { errors: { field: string }[] }).errors[0]?.field).toBe("title");
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  it("maps a Postgres data exception that slips through to 400, not 500", async () => {
+    const pgError = Object.assign(new Error('invalid byte sequence for encoding "UTF8": 0x00'), {
+      code: "22021",
+    });
+    vi.mocked(repo.create).mockRejectedValue(pgError);
+    const res = await invoke({ method: "POST", resource: "/todos", body: { title: "ok" } });
+    expect(res.statusCode).toBe(400);
+    expect(res.headers?.["content-type"]).toBe("application/problem+json");
+    expect((parse(res) as { detail: string }).detail).not.toContain("UTF8");
+  });
+});
+
 describe("path id validation", () => {
   it("rejects a non-uuid id with 400 (declared on get/delete in the contract)", async () => {
     const res = await invoke({

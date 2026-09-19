@@ -45,6 +45,8 @@ jobs:
         run: task test:bdd
       - name: "test: contract conformance"
         run: task test:contract
+      - name: "test: HTTP layer against the local server (Schemathesis + .http collection)"
+        run: task test:http
       - name: "terraform: fmt, validate (all envs), tflint"
         run: task tf:validate
       - name: "terraform: security scan (trivy + checkov)"

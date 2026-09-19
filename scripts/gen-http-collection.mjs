@@ -89,6 +89,7 @@ for (const [path, item] of Object.entries(spec.paths)) {
 
     const lines = [];
     lines.push(`### ${op.operationId} — ${op.summary ?? ""}`.trim());
+    lines.push(`# @name ${op.operationId}`);
     lines.push(`${method.toUpperCase()} ${url}`);
 
     const secured = (op.security ?? spec.security ?? []).length > 0;

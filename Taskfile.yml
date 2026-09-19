@@ -42,6 +42,7 @@ tasks:
       - task: test:integration
       - task: test:bdd
       - task: test:contract
+      - task: test:http
       - task: tf:validate
       - task: tf:scan
       - task: security:deps
@@ -118,12 +119,13 @@ tasks:
   # Tests (layers kept distinct — see docs/testing)
   # ---------------------------------------------------------------------------
   test:
-    desc: Run unit + integration + BDD + contract
+    desc: Run unit + integration + BDD + contract + HTTP
     cmds:
       - task: test:unit
       - task: test:integration
       - task: test:bdd
       - task: test:contract
+      - task: test:http
   test:unit:
     desc: Unit tests (pure logic, no I/O) — every workspace package that defines test:unit
     cmds:
@@ -140,8 +142,14 @@ tasks:
     desc: "Contract conformance: real handler responses validated against the generated schemas"
     cmds:
       - pnpm --filter @app/api test:contract
+  test:http:
+    desc: "HTTP layer: Schemathesis + the generated .http collection over real HTTP against local/server.ts + a throwaway Postgres (Docker)"
+    cmds:
+      # Orchestrated by packages/api/test/http/run.ts: container, migrations,
+      # server on a free loopback port, stub token, schemathesis, httpyac, teardown.
+      - pnpm --filter @app/api test:http
   test:fuzz:
-    desc: "Property-based fuzzing (Schemathesis) — nightly / on-spec-change"
+    desc: "Property-based fuzzing (Schemathesis) against a DEPLOYED stage — nightly / on-spec-change"
     cmds:
       - ./scripts/schemathesis.sh
 

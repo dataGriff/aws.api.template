@@ -116,6 +116,20 @@ const server = createServer((req, res) => {
   });
 });
 
+// Requests Node's HTTP parser rejects (malformed header values, oversized
+// headers) never reach the handler. API Gateway renders those as problem+json
+// through its gateway responses; mirror that instead of Node's bare 400.
+server.on("clientError", (err: NodeJS.ErrnoException, socket) => {
+  if (err.code === "ECONNRESET" || !socket.writable) {
+    socket.destroy();
+    return;
+  }
+  const body = problem(400, "Bad Request");
+  socket.end(
+    `HTTP/1.1 400 Bad Request\r\ncontent-type: application/problem+json\r\ncontent-length: ${Buffer.byteLength(body)}\r\nconnection: close\r\n\r\n${body}`,
+  );
+});
+
 server.listen(PORT, HOST, () => {
   console.log(`Local API on http://${HOST}:${PORT}${STAGE}  (Prism mock on :4010)`);
 });

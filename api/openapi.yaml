@@ -95,6 +95,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/todo"
+          # Links let tooling (Schemathesis stateful tests, SDK docs) follow a
+          # created todo into the by-id operations instead of guessing ids.
+          links:
+            get_todo: { $ref: "#/components/links/get_todo" }
+            update_todo: { $ref: "#/components/links/update_todo" }
+            delete_todo: { $ref: "#/components/links/delete_todo" }
         "400": { $ref: "#/components/responses/bad_request" }
         "401": { $ref: "#/components/responses/unauthorized" }
         "403": { $ref: "#/components/responses/forbidden" }
@@ -221,6 +227,20 @@ components:
         type: string
         minLength: 8
         maxLength: 128
+
+  links:
+    get_todo:
+      operationId: get_todo
+      parameters:
+        todo_id: $response.body#/todo_id
+    update_todo:
+      operationId: update_todo
+      parameters:
+        todo_id: $response.body#/todo_id
+    delete_todo:
+      operationId: delete_todo
+      parameters:
+        todo_id: $response.body#/todo_id
 
   headers:
     x_request_id:

@@ -1,6 +1,6 @@
 import type middy from "@middy/core";
 import type { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from "aws-lambda";
-import { AppError } from "../errors.js";
+import { AppError, BadRequestError } from "../errors.js";
 import { logger } from "../observability.js";
 
 // The correlation id is always the gateway's request id (it is what appears in
@@ -14,6 +14,20 @@ const clientRequestId = (event: APIGatewayProxyEvent): string | undefined => {
   const value = event.headers?.["x-request-id"];
   return typeof value === "string" && value.length > 0 ? value.slice(0, 128) : undefined;
 };
+
+// Postgres "data exception" errors (SQLSTATE class 22: invalid text
+// representation, string too long, invalid byte sequence, ...) mean the
+// database rejected a VALUE the client sent, not that the service is broken.
+// Defence in depth behind the schema validation: report them as 400 without
+// echoing the driver message.
+const PG_DATA_EXCEPTION = /^22/;
+function normalize(err: Error): Error {
+  const code = (err as { code?: unknown }).code;
+  if (!(err instanceof AppError) && typeof code === "string" && PG_DATA_EXCEPTION.test(code)) {
+    return new BadRequestError("Request contains a value the database cannot store");
+  }
+  return err;
+}
 
 // Maps thrown errors to RFC 7807 problem+json, and stamps x-request-id on every
 // response for trace correlation.
@@ -32,7 +46,7 @@ export function errorMapper(): middy.MiddlewareObj<APIGatewayProxyEvent, APIGate
     },
     onError: (request) => {
       const id = requestId(request.event, request.context);
-      const err = request.error as Error;
+      const err = normalize(request.error as Error);
       const isApp = err instanceof AppError;
       const status = isApp ? err.status : 500;
 
