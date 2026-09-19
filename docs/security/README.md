@@ -5,6 +5,10 @@ The template is secure-by-default.
 - **AuthN**: the **platform's** Cognito user pool issues JWTs (its pre-token-generation trigger
   adds `custom:tenant_id` and role claims); the API Gateway Cognito authorizer validates them
   against the pool ARN read from the platform interface.
+- **Required claims**: the contract's `access_token_claims` schema (validated in `auth/claims.ts`
+  with the package's generated zod) makes `sub` and `custom:tenant_id` mandatory — a valid token
+  without them is a 401 — and documents `roles` for consumers; the platform's interface doc
+  defines the same claims from the issuing side.
 - **AuthZ**: every data access is scoped by the caller's `sub` **and** tenant claim in the repository
   layer (tested on each axis independently). Client-supplied owner ids are never trusted. Group
   membership is exposed as a `roles` claim and `isAdmin()` helper for the admin operations you add;
