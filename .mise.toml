@@ -9,7 +9,6 @@ terraform = "1.9"
 task = "3"
 # Pinned for reproducibility (local == hooks == CI). Bumped via Renovate.
 tflint = "0.64.0"
-tfsec = "1.28.14"
 trivy = "0.74.0"
 gitleaks = "8.30.1"
 infracost = "0.10.45"

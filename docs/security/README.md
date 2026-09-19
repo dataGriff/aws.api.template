@@ -10,6 +10,6 @@ The template is secure-by-default.
   and a rate-based rule.
 - **Secrets**: Secrets Manager (+ rotation); prefer RDS Proxy IAM auth. Nothing sensitive in the repo.
 - **Data**: KMS encryption at rest, TLS in transit, PITR + deletion protection in prod.
-- **Supply chain / CI**: gitleaks, Trivy, tfsec + Checkov, semgrep, and a CycloneDX SBOM — all via
+- **Supply chain / CI**: gitleaks, Trivy (vuln + IaC config), Checkov, semgrep, and a CycloneDX SBOM — all via
   `task` targets so they run identically in hooks and CI. IAM is least-privilege; deploy uses OIDC
   (no long-lived keys), trust scoped per repo + branch/tag.

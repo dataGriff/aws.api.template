@@ -28,11 +28,14 @@ locals {
   })
 }
 
-# Guard interdependent flags.
-check "custom_domain_inputs" {
-  assert {
-    condition     = !var.custom_domain_enabled || (var.domain_name != null && var.hosted_zone_id != null)
-    error_message = "custom_domain_enabled requires domain_name and hosted_zone_id."
+# Guard interdependent flags. Uses a terraform_data precondition rather than a
+# top-level `check` block so all IaC scanners (some lag on newer HCL) parse it.
+resource "terraform_data" "guardrails" {
+  lifecycle {
+    precondition {
+      condition     = !var.custom_domain_enabled || (var.domain_name != null && var.hosted_zone_id != null)
+      error_message = "custom_domain_enabled requires domain_name and hosted_zone_id."
+    }
   }
 }
 

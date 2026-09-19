@@ -1,0 +1,11 @@
+# Trivy IaC exceptions (documented, reviewed).
+
+# AWS-0104: unrestricted security-group egress.
+# The Lambda/RDS-Proxy/DB security groups allow outbound because the Lambda must
+# reach AWS service endpoints (Secrets Manager, STS, KMS, CloudWatch Logs via
+# interface endpoints, and DynamoDB via the gateway endpoint's managed prefix
+# list), plus optional third-party egress when the static-egress-IP flag is on.
+# All these SGs are egress-only and attached to resources in private subnets
+# with no inbound path from the internet. Tighten to your exact destinations if
+# your threat model requires it (see docs/security).
+AWS-0104

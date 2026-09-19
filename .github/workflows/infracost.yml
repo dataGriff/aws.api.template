@@ -14,14 +14,34 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: infracost/actions/setup@v3
+
+      # Infracost needs an API key. Skip cleanly (green) when it isn't configured
+      # so the template doesn't fail CI out of the box.
+      - name: Check for API key
+        id: guard
+        env:
+          INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
+        run: |
+          if [ -z "$INFRACOST_API_KEY" ]; then
+            echo "::warning::INFRACOST_API_KEY not set — skipping cost estimate."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.guard.outputs.enabled == 'true'
+        uses: infracost/actions/setup@v3
         with:
           api-key: ${{ secrets.INFRACOST_API_KEY }}
+
       - name: Cost breakdown (dev env)
+        if: steps.guard.outputs.enabled == 'true'
         run: |
           infracost breakdown --path infra/terraform/envs/dev \
             --format json --out-file /tmp/infracost.json
+
       - name: Post PR comment
+        if: steps.guard.outputs.enabled == 'true'
         run: |
           infracost comment github --path /tmp/infracost.json \
             --repo "$GITHUB_REPOSITORY" \
