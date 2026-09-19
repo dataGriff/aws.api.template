@@ -231,11 +231,31 @@ tasks:
       - terraform apply -auto-approve -var-file=terraform.tfvars
 
   deploy:
-    desc: "Full deploy for an env: migrate then apply infra"
+    desc: "Full deploy for an env: apply infra then migrate"
     cmds:
       - task: tf:apply
         vars: { ENV: "{{.ENV}}" }
       - task: db:migrate
+
+  smoke:
+    desc: "Post-deploy smoke test: run the health collection against URL=<base>"
+    cmds:
+      - httpyac send collections/health.http --all --var baseUrl={{.URL}}
+
+  # ---------------------------------------------------------------------------
+  # Release
+  # ---------------------------------------------------------------------------
+  release:
+    desc: Run semantic-release (changelog, tag, GitHub release)
+    cmds:
+      - npx -y -p semantic-release@24 -p @semantic-release/changelog@6 -p @semantic-release/git@10 semantic-release -e ./.releaserc.json
+  sdk:publish:
+    desc: "Build and publish the consumer SDK at VERSION=<x.y.z>"
+    cmds:
+      - pnpm --filter @app/sdk exec npm version {{.VERSION}} --no-git-tag-version
+      - task: gen
+      - pnpm --filter @app/sdk build
+      - pnpm --filter @app/sdk publish --no-git-checks
 
   # ---------------------------------------------------------------------------
   # Cost

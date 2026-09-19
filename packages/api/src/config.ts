@@ -19,6 +19,9 @@ const schema = z.object({
   DB_NAME: z.string().default("app"),
   DB_USER: z.string().default("app"),
   DB_SSL: bool(false),
+  // Optional path to a CA bundle (e.g. the Amazon RDS global bundle) trusted in
+  // addition to Node's built-in roots.
+  DB_CA_PATH: z.string().optional(),
 
   // When true, mint short-lived RDS Proxy IAM auth tokens instead of a password.
   DB_IAM_AUTH: bool(false),

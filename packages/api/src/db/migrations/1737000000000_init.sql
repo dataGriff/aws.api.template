@@ -10,8 +10,11 @@ CREATE TABLE todos (
   description text,
   status      text        NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'in_progress', 'done')),
   due_date    date,
-  created_at  timestamptz NOT NULL DEFAULT now(),
-  updated_at  timestamptz NOT NULL DEFAULT now()
+  -- Millisecond precision so keyset cursors (built from JS Date via
+  -- toISOString(), which is ms-precision) compare exactly against stored values
+  -- and never skip rows created within the same microsecond.
+  created_at  timestamptz(3) NOT NULL DEFAULT now(),
+  updated_at  timestamptz(3) NOT NULL DEFAULT now()
 );
 
 -- Supports the keyset pagination query: filter by tenant+user, order by

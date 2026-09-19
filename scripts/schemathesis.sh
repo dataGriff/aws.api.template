@@ -9,7 +9,7 @@ SCHEMA="${SCHEMA:-api/openapi.yaml}"
 API_URL="${API_URL:-http://localhost:3000/v1}"
 MAX_EXAMPLES="${SCHEMATHESIS_EXAMPLES:-25}"
 
-args=(run "$SCHEMA" --url "$API_URL" --checks all --max-examples "$MAX_EXAMPLES")
+args=(run "$SCHEMA" --base-url "$API_URL" --checks all --hypothesis-max-examples "$MAX_EXAMPLES")
 
 if [[ -n "${API_TOKEN:-}" ]]; then
   args+=(--header "Authorization: Bearer ${API_TOKEN}")

@@ -162,7 +162,7 @@ module "lambda_api" {
   db_name                = var.db_name
   db_user                = var.db_username
   secret_arn             = module.secrets.secret_arn
-  rds_proxy_resource_id  = var.enable_rds_proxy ? "*" : null
+  rds_proxy_resource_id  = var.enable_rds_proxy ? module.rds_proxy[0].proxy_resource_id : null
   idempotency_table_name = aws_dynamodb_table.idempotency.name
   idempotency_table_arn  = aws_dynamodb_table.idempotency.arn
   tags                   = local.tags
@@ -203,6 +203,7 @@ module "ingress_static_ip" {
   name       = local.name
   vpc_id     = module.network.vpc_id
   subnet_ids = module.network.private_subnet_ids
+  target_ips = var.ingress_target_ips
   tags       = local.tags
 }
 

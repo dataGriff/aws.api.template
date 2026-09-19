@@ -27,6 +27,30 @@ describe("extractAuth", () => {
     expect(isAdmin(auth)).toBe(true);
   });
 
+  it("reads groups from an array claim (local/raw token)", () => {
+    const auth = extractAuth(
+      buildEvent({
+        method: "GET",
+        resource: "/todos",
+        claims: { sub: "u1", "custom:tenant_id": "t1", "cognito:groups": ["admin"] as never },
+      }),
+    );
+    expect(auth.groups).toEqual(["admin"]);
+    expect(isAdmin(auth)).toBe(true);
+  });
+
+  it("reads groups from the trigger's comma-joined 'roles' claim", () => {
+    const auth = extractAuth(
+      buildEvent({
+        method: "GET",
+        resource: "/todos",
+        claims: { sub: "u1", "custom:tenant_id": "t1", roles: "admin,ops" },
+      }),
+    );
+    expect(auth.groups).toContain("admin");
+    expect(isAdmin(auth)).toBe(true);
+  });
+
   it("rejects a token missing required claims", () => {
     expect(() =>
       extractAuth(buildEvent({ method: "GET", resource: "/todos", claims: { sub: "u1" } })),

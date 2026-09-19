@@ -7,19 +7,23 @@ pnpm = "9"
 python = "3.12"
 terraform = "1.9"
 task = "3"
-tflint = "latest"
-tfsec = "latest"
-trivy = "latest"
-gitleaks = "latest"
-infracost = "latest"
-lefthook = "latest"
-"npm:@redocly/cli" = "latest"
-"npm:@stoplight/prism-cli" = "latest"
-"npm:httpyac" = "latest"
-"pipx:schemathesis" = "latest"
-"pipx:checkov" = "latest"
-"pipx:semgrep" = "latest"
-"pipx:harlequin" = "latest"
+# Pinned for reproducibility (local == hooks == CI). Bumped via Renovate.
+tflint = "0.64.0"
+tfsec = "1.28.14"
+trivy = "0.74.0"
+gitleaks = "8.30.1"
+infracost = "0.10.45"
+lefthook = "2.1.14"
+# Redocly held on 1.x: v2 changed the config schema (redocly.yaml) and the
+# rendered docs output, which would break lint rules and the gen drift-gate.
+"npm:@redocly/cli" = "1.34.5"
+"npm:@stoplight/prism-cli" = "5.16.0"
+"npm:httpyac" = "6.16.7"
+# Schemathesis held on 3.x to match the CLI flags in scripts/schemathesis.sh.
+"pipx:schemathesis" = "3.39.16"
+"pipx:checkov" = "3.3.19"
+"pipx:semgrep" = "1.177.0"
+"pipx:harlequin" = "2.15.0"
 
 [env]
 # Loaded into the shell (and CI) for every task. Non-secret defaults only.

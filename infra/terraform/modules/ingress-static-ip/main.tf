@@ -29,6 +29,16 @@ resource "aws_lb_target_group" "this" {
   protocol    = "TCP"
   target_type = "ip"
   vpc_id      = var.vpc_id
+
+  # Fail fast instead of silently provisioning an Accelerator + NLB with zero
+  # targets (which would blackhole all ingress). Supply the execute-api VPC
+  # endpoint ENI private IPs — see docs/architecture.
+  lifecycle {
+    precondition {
+      condition     = length(var.target_ips) > 0
+      error_message = "ingress-static-ip requires target_ips (the private IPs of the execute-api VPC endpoint ENIs). See docs/architecture."
+    }
+  }
 }
 
 resource "aws_lb_target_group_attachment" "this" {

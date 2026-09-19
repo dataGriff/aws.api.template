@@ -24,6 +24,9 @@ jobs:
       ENV: ${{ github.event.inputs.environment || 'dev' }}
       AWS_REGION: ${{ vars.AWS_REGION || 'eu-west-2' }}
       TF_DIR: infra/terraform/envs/${{ github.event.inputs.environment || 'dev' }}
+      # Inject remote-state backend config into `terraform init` (run by the task)
+      # so CI and local `task tf:apply` share the same code path.
+      TF_CLI_ARGS_init: -backend-config=bucket=${{ secrets.TF_STATE_BUCKET }} -backend-config=region=${{ vars.AWS_REGION || 'eu-west-2' }}
     steps:
       - uses: actions/checkout@v4
       - uses: jdx/mise-action@v2
@@ -42,18 +45,14 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Terraform init
-        run: |
-          terraform -chdir="$TF_DIR" init \
-            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
-            -backend-config="region=${{ env.AWS_REGION }}"
-
+      # Apply infra via the same task local dev uses (init picks up backend
+      # config from TF_CLI_ARGS_init).
       - name: Terraform apply
-        run: terraform -chdir="$TF_DIR" apply -auto-approve -var-file=terraform.tfvars
+        run: task tf:apply ENV="$ENV"
 
-      # Migrations run out-of-band, before traffic depends on the new schema.
-      # The DB is private, so provide MIGRATION_DATABASE_URL via an in-VPC path
-      # (bastion/tunnel/self-hosted runner). Skipped with a notice if absent.
+      # Migrations run out-of-band. The DB is private, so provide
+      # MIGRATION_DATABASE_URL via an in-VPC path (bastion/tunnel/self-hosted
+      # runner). Skipped with a notice if absent.
       - name: Run database migrations
         env:
           DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
@@ -61,12 +60,12 @@ jobs:
           if [ -z "$DATABASE_URL" ]; then
             echo "::warning::MIGRATION_DATABASE_URL not set — skipping migrations. See docs/operations."
           else
-            pnpm --filter @app/api db:migrate
+            task db:migrate
           fi
 
-      # Post-deploy smoke test: run the generated .http collection against the
-      # deployed stage. Best-effort — needs a token (API_SMOKE_TOKEN) + api key.
-      - name: Smoke test (httpyac)
+      # Post-deploy smoke test against the deployed stage. Best-effort — needs a
+      # token (API_SMOKE_TOKEN) + api key.
+      - name: Smoke test
         if: ${{ env.ENV != 'prod' }}
         env:
           SMOKE_TOKEN: ${{ secrets.API_SMOKE_TOKEN }}
@@ -75,5 +74,5 @@ jobs:
             echo "::warning::API_SMOKE_TOKEN not set — skipping smoke test."
           else
             URL=$(terraform -chdir="$TF_DIR" output -raw api_invoke_url)
-            httpyac send collections/health.http --all --var baseUrl="$URL"
+            task smoke URL="$URL"
           fi

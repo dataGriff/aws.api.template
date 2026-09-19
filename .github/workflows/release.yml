@@ -17,9 +17,6 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
-    outputs:
-      released: ${{ steps.semrel.outputs.new_release_published }}
-      version: ${{ steps.semrel.outputs.new_release_version }}
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
@@ -27,33 +24,31 @@ jobs:
         with: { install: true, cache: true }
       - run: pnpm install --frozen-lockfile
       - name: Semantic release
-        id: semrel
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx -y semantic-release@24 -e ./.releaserc.json
+        run: task release
 
-  # Publish the generated consumer SDK. Runs only when a release happened and an
-  # NPM/registry token is configured. Set packages/sdk publishConfig.registry and
-  # the package scope to your org first (see docs/consumer-guide).
+  # Publish the generated consumer SDK when enabled and a registry token is set.
+  # Set packages/sdk publishConfig.registry and the package scope to your org
+  # first (see docs/consumer-guide). Version is taken from the tag semantic-release
+  # just created.
   publish-sdk:
     needs: release
-    if: ${{ needs.release.outputs.released == 'true' && vars.PUBLISH_SDK == 'true' }}
+    if: ${{ vars.PUBLISH_SDK == 'true' }}
     runs-on: ubuntu-latest
     permissions: { contents: read, packages: write }
     steps:
       - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
       - uses: jdx/mise-action@v2
         with: { install: true, cache: true }
       - run: pnpm install --frozen-lockfile
-      - run: task gen
-      - name: Version + build SDK
-        run: |
-          pnpm --filter @app/sdk exec npm version "${{ needs.release.outputs.version }}" --no-git-tag-version
-          pnpm --filter @app/sdk build
-      - name: Publish
+      - name: Publish SDK
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: pnpm --filter @app/sdk publish --no-git-checks --no-git-tag-version
+        run: |
+          VERSION="$(git describe --tags --abbrev=0 | sed 's/^v//')"
+          task sdk:publish VERSION="$VERSION"
 
   docs:
     needs: release

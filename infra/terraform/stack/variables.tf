@@ -31,6 +31,11 @@ variable "enable_ingress_static_ip" {
   type    = bool
   default = false
 }
+variable "ingress_target_ips" {
+  type        = list(string)
+  default     = []
+  description = "Private IPs of the execute-api VPC endpoint ENIs (required when enable_ingress_static_ip is true)"
+}
 variable "custom_domain_enabled" {
   type    = bool
   default = false

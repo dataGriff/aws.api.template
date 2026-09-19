@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { Pool, type PoolConfig } from "pg";
 import { Signer } from "@aws-sdk/rds-signer";
 import { getSecret } from "@aws-lambda-powertools/parameters/secrets";
@@ -32,9 +33,17 @@ async function buildConfig(): Promise<PoolConfig> {
   const host = cfg.DB_HOST;
   if (!host) throw new Error("DB_HOST or DATABASE_URL must be set");
 
-  // TLS is required for RDS Proxy. Load the Amazon RDS CA bundle via
-  // NODE_EXTRA_CA_CERTS so the chain verifies (rejectUnauthorized stays true).
-  const ssl = cfg.DB_SSL ? { rejectUnauthorized: true } : false;
+  // TLS with full verification. Modern RDS / RDS Proxy certificates chain to
+  // Amazon roots that Node already trusts, so no extra CA is needed. For older
+  // RDS CAs, point DB_CA_PATH at the Amazon RDS global CA bundle bundled into
+  // the artifact and it is trusted in addition to the built-in roots.
+  const ssl: PoolConfig["ssl"] = cfg.DB_SSL
+    ? {
+        rejectUnauthorized: true,
+        // eslint-disable-next-line security/detect-non-literal-fs-filename -- operator-provided CA path, not user input
+        ...(cfg.DB_CA_PATH ? { ca: readFileSync(cfg.DB_CA_PATH, "utf8") } : {}),
+      }
+    : false;
 
   const base: PoolConfig = {
     host,

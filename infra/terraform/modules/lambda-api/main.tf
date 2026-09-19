@@ -111,7 +111,6 @@ resource "aws_lambda_function" "api" {
       DB_IAM_AUTH                  = var.rds_proxy_resource_id == null ? "false" : "true"
       DB_SECRET_ARN                = var.secret_arn
       IDEMPOTENCY_TABLE            = var.idempotency_table_name == null ? "" : var.idempotency_table_name
-      NODE_EXTRA_CA_CERTS          = "/var/runtime/ca-cert.pem"
     }, var.extra_environment)
   }
 

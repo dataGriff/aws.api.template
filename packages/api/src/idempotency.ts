@@ -13,16 +13,20 @@ export async function createTodoIdempotent(
   const cfg = getConfig();
   if (!cfg.IDEMPOTENCY_TABLE || !key) return createTodo(auth, input);
 
-  const [{ makeIdempotent }, { DynamoDBPersistenceLayer }] = await Promise.all([
+  const [{ makeIdempotent, IdempotencyConfig }, { DynamoDBPersistenceLayer }] = await Promise.all([
     import("@aws-lambda-powertools/idempotency"),
     import("@aws-lambda-powertools/idempotency/dynamodb"),
   ]);
 
   const persistenceStore = new DynamoDBPersistenceLayer({ tableName: cfg.IDEMPOTENCY_TABLE });
+  // Key on the Idempotency-Key header, scoped by tenant + user so the same key
+  // cannot collide across tenants. Reusing a key with a different body raises an
+  // idempotency mismatch (409), as the contract promises.
+  const config = new IdempotencyConfig({ eventKeyJmesPath: "[key, tenant, user]" });
   const fn = makeIdempotent(
     (payload: { key: string; tenant: string; user: string; input: TodoCreate }) =>
       createTodo(auth, payload.input),
-    { persistenceStore },
+    { persistenceStore, config },
   );
   return fn({ key, tenant: auth.tenantId, user: auth.userSub, input });
 }
