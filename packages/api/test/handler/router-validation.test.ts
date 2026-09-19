@@ -46,6 +46,22 @@ describe("query parameter validation (contract: limit 1..100, default 20)", () =
     expect(repo.list).toHaveBeenLastCalledWith(expect.anything(), { limit: 100 });
   });
 
+  it("rejects unknown query parameters with 400", async () => {
+    const res = await invoke({
+      method: "GET",
+      resource: "/todos",
+      queryStringParameters: { "": "false" },
+    });
+    expect(res.statusCode).toBe(400);
+    const res2 = await invoke({
+      method: "GET",
+      resource: "/todos",
+      queryStringParameters: { page: "2" },
+    });
+    expect(res2.statusCode).toBe(400);
+    expect(repo.list).not.toHaveBeenCalled();
+  });
+
   it("rejects an unknown status filter with 400", async () => {
     const res = await invoke({
       method: "GET",
@@ -86,6 +102,38 @@ describe("NUL characters (Postgres cannot store U+0000)", () => {
     expect(res.statusCode).toBe(400);
     expect(res.headers?.["content-type"]).toBe("application/problem+json");
     expect((parse(res) as { detail: string }).detail).not.toContain("UTF8");
+  });
+});
+
+describe("idempotency-key header (contract: string 8..128)", () => {
+  it.each([["short"], ["x".repeat(129)]])("rejects %j with 400 naming the header", async (key) => {
+    const res = await invoke({
+      method: "POST",
+      resource: "/todos",
+      body: { title: "x" },
+      headers: { "idempotency-key": key },
+    });
+    expect(res.statusCode).toBe(400);
+    expect((parse(res) as { errors: { field: string }[] }).errors[0]?.field).toBe(
+      "idempotency-key",
+    );
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  it("accepts a key within bounds and creation without a key", async () => {
+    expect(
+      (
+        await invoke({
+          method: "POST",
+          resource: "/todos",
+          body: { title: "x" },
+          headers: { "idempotency-key": "12345678" },
+        })
+      ).statusCode,
+    ).toBe(201);
+    expect(
+      (await invoke({ method: "POST", resource: "/todos", body: { title: "x" } })).statusCode,
+    ).toBe(201);
   });
 });
 

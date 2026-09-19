@@ -229,6 +229,7 @@ module "database" {
   database_name              = var.db_name
   username                   = var.db_username
   password                   = module.secrets.password
+  create_kms_key             = false
   kms_key_arn                = aws_kms_key.data.arn
   instance_class             = var.db_instance_class
   multi_az                   = var.db_multi_az
@@ -309,6 +310,7 @@ module "lambda_api" {
   db_name                = var.db_name
   db_user                = var.db_username
   secret_arn             = module.secrets.secret_arn
+  rds_iam_auth           = var.enable_rds_proxy
   rds_proxy_resource_id  = var.enable_rds_proxy ? module.rds_proxy[0].proxy_resource_id : null
   idempotency_table_name = aws_dynamodb_table.idempotency.name
   idempotency_table_arn  = aws_dynamodb_table.idempotency.arn

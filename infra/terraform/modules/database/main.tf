@@ -9,7 +9,7 @@ locals {
   is_aurora = var.engine == "aurora"
   is_rds    = var.engine == "rds"
 
-  kms_key_arn = var.kms_key_arn != null ? var.kms_key_arn : aws_kms_key.db[0].arn
+  kms_key_arn = var.create_kms_key ? aws_kms_key.db[0].arn : var.kms_key_arn
 
   # Parameter-group families follow the major engine version.
   postgres_major = split(".", var.postgres_version)[0]
@@ -39,7 +39,7 @@ data "aws_iam_policy_document" "kms" {
 }
 
 resource "aws_kms_key" "db" {
-  count                   = var.kms_key_arn == null ? 1 : 0
+  count                   = var.create_kms_key ? 1 : 0
   description             = "${var.name} database encryption"
   deletion_window_in_days = 7
   enable_key_rotation     = true

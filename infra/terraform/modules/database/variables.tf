@@ -26,10 +26,15 @@ variable "password" {
   sensitive = true
 }
 
+variable "create_kms_key" {
+  type        = bool
+  default     = true
+  description = "Create a CMK for storage encryption. Set false and pass kms_key_arn to reuse one. (A boolean rather than `kms_key_arn == null` because the ARN is unknown until apply and count/for_each need a known value at plan time.)"
+}
 variable "kms_key_arn" {
   type        = string
   default     = null
-  description = "CMK for storage encryption. When null the module creates one."
+  description = "Existing CMK ARN, used when create_kms_key = false."
 }
 
 variable "instance_class" {

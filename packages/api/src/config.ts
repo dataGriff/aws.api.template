@@ -31,6 +31,8 @@ const schema = z.object({
 
   // DynamoDB table backing Powertools idempotency.
   IDEMPOTENCY_TABLE: z.string().optional(),
+  // Optional endpoint override (DynamoDB Local in tests), like DATABASE_URL for Postgres.
+  IDEMPOTENCY_ENDPOINT: z.string().url().optional(),
 });
 
 export type AppConfig = z.infer<typeof schema>;
@@ -40,4 +42,9 @@ let cached: AppConfig | undefined;
 export function getConfig(): AppConfig {
   cached ??= schema.parse(process.env);
   return cached;
+}
+
+// Tests only: forget the cached snapshot so a changed process.env is re-read.
+export function resetConfig(): void {
+  cached = undefined;
 }

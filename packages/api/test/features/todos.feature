@@ -16,7 +16,7 @@ Feature: Managing todos
     And I have created a todo titled "Second"
     When I list my todos
     Then the response status is 200
-    And the list contains at least 2 todos
+    And the list contains exactly 2 todos
 
   # Tenant isolation is asserted on each axis independently so that dropping
   # either predicate (tenant_id or user_sub) from the repository fails a test.

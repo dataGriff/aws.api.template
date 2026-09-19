@@ -34,18 +34,23 @@ export function parseBody<T>(event: APIGatewayProxyEvent, schema: z.ZodTypeAny):
   return validate<T>(schema, raw);
 }
 
-export function validate<T>(schema: z.ZodTypeAny, value: unknown): T {
+// `field` names the value being validated when the schema has no path of its
+// own (a single header or path parameter), so the 400 points at the right thing.
+export function validate<T>(schema: z.ZodTypeAny, value: unknown, field = "(root)"): T {
   const result = schema.safeParse(value);
   if (!result.success) {
     throw new BadRequestError(
       "Request validation failed",
-      result.error.issues.map((i) => ({ field: i.path.join(".") || "(root)", message: i.message })),
+      result.error.issues.map((i) => ({ field: i.path.join(".") || field, message: i.message })),
     );
   }
   const nul = findNul(result.data);
   if (nul) {
     throw new BadRequestError("Request validation failed", [
-      { field: nul, message: "must not contain NUL (\\u0000) characters" },
+      {
+        field: nul === "(root)" ? field : nul,
+        message: "must not contain NUL (\\u0000) characters",
+      },
     ]);
   }
   return result.data as T;

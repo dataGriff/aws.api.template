@@ -243,8 +243,14 @@ tasks:
       # --recursive: infra/terraform itself holds no .tf files, only modules/, stack/, envs/, bootstrap/.
       - tflint --chdir={{.TF_DIR}} --init
       - tflint --chdir={{.TF_DIR}} --recursive
+      - task: tf:test
     vars:
       TF_ROOTS: envs/dev envs/staging envs/prod bootstrap
+  tf:test:
+    desc: "terraform test of the stack's guardrails and sizing rules (mocked providers, no credentials)"
+    cmds:
+      - terraform -chdir={{.TF_DIR}}/stack init -backend=false -input=false >/dev/null
+      - terraform -chdir={{.TF_DIR}}/stack test
   tf:scan:
     desc: IaC security scan (Trivy config + Checkov) — both fail on findings
     cmds:
@@ -285,9 +291,16 @@ tasks:
       - task: db:migrate
 
   smoke:
-    desc: "Post-deploy smoke test: run the health collection against URL=<base>"
+    desc: "Post-deploy smoke: health + API Gateway behaviour checks (authorizer, gateway responses, CORS) against URL=<invoke url> for ENV=<env>"
+    dir: "{{.TF_DIR}}/envs/{{.ENV}}"
+    preconditions:
+      - sh: test -n "{{.URL}}"
+        msg: "Pass URL=<stage invoke url> (terraform output api_invoke_url)."
     cmds:
-      - httpyac send collections/health.http --all --var baseUrl={{.URL}}
+      # The stage's API key value is only readable through the API (the output exposes the id).
+      - |
+        API_KEY="$(aws apigateway get-api-key --api-key "$(terraform output -raw api_key_id)" --include-value --query value --output text)"
+        httpyac send ../../../../collections/health.http ../../../../collections/gateway.http --all --var baseUrl={{.URL}} --var apiKey="$API_KEY"
 
   # ---------------------------------------------------------------------------
   # Release

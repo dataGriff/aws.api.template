@@ -9,7 +9,11 @@ SCHEMA="${SCHEMA:-api/openapi.yaml}"
 API_URL="${API_URL:-http://localhost:3000/v1}"
 MAX_EXAMPLES="${SCHEMATHESIS_EXAMPLES:-25}"
 
-args=(run "$SCHEMA" --base-url "$API_URL" --checks all --hypothesis-max-examples "$MAX_EXAMPLES")
+# `all` sends valid AND deliberately invalid inputs, so the negative_data_rejection
+# check actually verifies that invalid requests come back 4xx.
+DATA_GENERATION="${SCHEMATHESIS_DATA_GENERATION:-all}"
+
+args=(run "$SCHEMA" --base-url "$API_URL" --checks all --data-generation-method "$DATA_GENERATION" --hypothesis-max-examples "$MAX_EXAMPLES")
 
 # Optional comma-separated checks to skip (e.g. auth probes against the local
 # stub authorizer). Everything else in --checks all still runs.
@@ -25,5 +29,5 @@ if [[ -n "${API_KEY:-}" ]]; then
 fi
 
 # Do not echo the argument list: it carries the bearer token / API key.
-echo "schemathesis run ${SCHEMA} --base-url ${API_URL} --checks all${SCHEMATHESIS_EXCLUDE_CHECKS:+ --exclude-checks ${SCHEMATHESIS_EXCLUDE_CHECKS}} --hypothesis-max-examples ${MAX_EXAMPLES}${API_TOKEN:+ (with bearer token)}${API_KEY:+ (with api key)}"
+echo "schemathesis run ${SCHEMA} --base-url ${API_URL} --checks all${SCHEMATHESIS_EXCLUDE_CHECKS:+ --exclude-checks ${SCHEMATHESIS_EXCLUDE_CHECKS}} --data-generation-method ${DATA_GENERATION} --hypothesis-max-examples ${MAX_EXAMPLES}${API_TOKEN:+ (with bearer token)}${API_KEY:+ (with api key)}"
 exec schemathesis "${args[@]}"

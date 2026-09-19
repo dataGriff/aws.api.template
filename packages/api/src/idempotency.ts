@@ -24,13 +24,35 @@ export function bindLambdaContext(context: Context): void {
   lambdaContext = context;
 }
 
-async function buildIdempotent(tableName: string): Promise<Idempotent> {
+// Tests only: drop the cached layer so a changed table/endpoint is picked up.
+export function resetIdempotency(): void {
+  idempotent = undefined;
+}
+
+async function buildIdempotent(
+  tableName: string,
+  endpoint: string | undefined,
+): Promise<Idempotent> {
   const [{ makeIdempotent, IdempotencyConfig }, { DynamoDBPersistenceLayer }] = await Promise.all([
     import("@aws-lambda-powertools/idempotency"),
     import("@aws-lambda-powertools/idempotency/dynamodb"),
   ]);
 
-  const persistenceStore = new DynamoDBPersistenceLayer({ tableName });
+  // Table attribute names are Powertools' defaults (id, expiration, status,
+  // data, validation); infra/terraform/stack/main.tf declares the table with
+  // the same key and TTL attribute, and the integration test asserts that.
+  const persistenceStore = new DynamoDBPersistenceLayer({
+    tableName,
+    ...(endpoint
+      ? {
+          clientConfig: {
+            endpoint,
+            region: getConfig().AWS_REGION,
+            credentials: { accessKeyId: "local", secretAccessKey: "local" },
+          },
+        }
+      : {}),
+  });
   // Key on the Idempotency-Key header, scoped by tenant + user so the same key
   // cannot collide across tenants. The request body is hashed alongside the
   // key: reusing a key with a different body is rejected as a conflict (409)
@@ -56,7 +78,7 @@ export async function createTodoIdempotent(
   const cfg = getConfig();
   if (!cfg.IDEMPOTENCY_TABLE || !key) return createTodo(auth, input);
 
-  idempotent ??= buildIdempotent(cfg.IDEMPOTENCY_TABLE);
+  idempotent ??= buildIdempotent(cfg.IDEMPOTENCY_TABLE, cfg.IDEMPOTENCY_ENDPOINT);
   const { fn, registerLambdaContext } = await idempotent;
   if (lambdaContext) registerLambdaContext(lambdaContext);
   try {

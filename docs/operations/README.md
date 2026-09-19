@@ -6,7 +6,8 @@ Runbooks for deploying and operating the API.
   manual dispatch for `staging`/`prod` behind GitHub Environment protection rules. It assumes the
   per-environment OIDC role created by `infra/terraform/bootstrap/` (trust is scoped to
   `repo:<owner>/<repo>:environment:<env>`), then runs `task tf:apply ENV=<env>` (plan to a file, apply
-  that plan; the plan is kept as a workflow artifact) followed by `task db:migrate`. **Migrations run
+  that plan; the plan is kept as a workflow artifact) followed by `task db:migrate` and, for dev/staging, `task smoke` (health + API Gateway behaviour checks;
+  see docs/testing). **Migrations run
   after the new code is live**, so every migration must be backward-compatible with the previous
   version (expand/contract: add columns/tables first, switch code, drop later). Migrations are skipped
   with a warning when `MIGRATION_DATABASE_URL` is not set — the DB is private, so supply it via an

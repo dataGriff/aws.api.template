@@ -22,22 +22,21 @@ variable "db_user" {
   default = "app"
 }
 variable "secret_arn" {
-  type    = string
-  default = null
+  type        = string
+  description = "Secrets Manager secret holding the DB credentials (always present)"
 }
 
+variable "rds_iam_auth" {
+  type        = bool
+  default     = false
+  description = "Connect through RDS Proxy with IAM auth (known at plan time; the proxy id below may not be)"
+}
 variable "rds_proxy_resource_id" {
   type    = string
   default = null
 }
-variable "idempotency_table_name" {
-  type    = string
-  default = null
-}
-variable "idempotency_table_arn" {
-  type    = string
-  default = null
-}
+variable "idempotency_table_name" { type = string }
+variable "idempotency_table_arn" { type = string }
 
 variable "memory_size" {
   type    = number
@@ -62,11 +61,9 @@ variable "tags" {
 }
 variable "kms_key_arn" {
   type        = string
-  default     = null
   description = "CMK for the log group and the function's environment variables"
 }
 variable "data_kms_key_arn" {
   type        = string
-  default     = null
   description = "CMK protecting the DB secret and idempotency table (grants kms:Decrypt to the role)"
 }

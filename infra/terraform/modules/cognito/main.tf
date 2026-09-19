@@ -36,13 +36,10 @@ data "aws_iam_policy_document" "pretoken" {
     actions   = ["xray:PutTraceSegments", "xray:PutTelemetryRecords"]
     resources = ["*"]
   }
-  dynamic "statement" {
-    for_each = var.kms_key_arn == null ? [] : [1]
-    content {
-      sid       = "DecryptEnvironment"
-      actions   = ["kms:Decrypt"]
-      resources = [var.kms_key_arn]
-    }
+  statement {
+    sid       = "DecryptEnvironment"
+    actions   = ["kms:Decrypt"]
+    resources = [var.kms_key_arn]
   }
 }
 

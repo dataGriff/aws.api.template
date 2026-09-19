@@ -16,11 +16,15 @@ const health: Handler = async () =>
 // Query parameter validation mirrors api/openapi.yaml. API Gateway's request
 // validator only checks that required parameters are *present*, so range and
 // type constraints must be enforced here to honour the contract's 400s.
-const listQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(100).default(20),
-  cursor: z.string().max(512).optional(),
-  status: schemas.todoStatusSchema.optional(),
-});
+// .strict(): unknown query parameters are rejected (400), the same stance the
+// contract takes on request bodies with additionalProperties: false.
+const listQuerySchema = z
+  .object({
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+    cursor: z.string().max(512).optional(),
+    status: schemas.todoStatusSchema.optional(),
+  })
+  .strict();
 
 const listTodos: Handler = async (event) => {
   const auth = extractAuth(event);
@@ -43,11 +47,19 @@ const locationFor = (event: APIGatewayProxyEvent, id: string): string => {
   return `${base}/${id}`;
 };
 
+// Mirrors the contract's idempotency-key parameter (string, 8..128). API
+// Gateway does not schema-validate header values, so the bound is enforced here.
+const idempotencyKeySchema = z.string().min(8).max(128).optional();
+
 const createTodo: Handler = async (event) => {
   const auth = extractAuth(event);
   const input = parseBody<TodoCreate>(event, schemas.todoCreateSchema);
   // Headers are lower-cased by the header-normalizer middleware.
-  const key = event.headers?.["idempotency-key"];
+  const key = validate<string | undefined>(
+    idempotencyKeySchema,
+    event.headers?.["idempotency-key"],
+    "idempotency-key",
+  );
   const created = await createTodoIdempotent(auth, input, key);
   return json(201, created, { location: locationFor(event, created.todo_id) });
 };
@@ -56,7 +68,7 @@ const uuid = z.string().uuid();
 const pathId = (event: APIGatewayProxyEvent): string => {
   const id = event.pathParameters?.todo_id;
   if (!id) throw new NotFoundError("Missing todo id");
-  return validate<string>(uuid, id);
+  return validate<string>(uuid, id, "todo_id");
 };
 
 const getTodo: Handler = async (event) =>

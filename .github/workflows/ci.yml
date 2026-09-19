@@ -45,7 +45,7 @@ jobs:
         run: task test:bdd
       - name: "test: contract over HTTP (Schemathesis provider + SDK consumer + .http collection)"
         run: task test:contract
-      - name: "terraform: fmt, validate (all envs), tflint"
+      - name: "terraform: fmt, validate (all envs), tflint, terraform test (guardrails)"
         run: task tf:validate
       - name: "terraform: security scan (trivy + checkov)"
         run: task tf:scan

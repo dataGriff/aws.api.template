@@ -106,9 +106,9 @@ Then("the todo has title {string}", function (this: TodoWorld, title: string) {
   assert.equal(body.title, title);
 });
 
-Then("the list contains at least {int} todos", function (this: TodoWorld, n: number) {
+Then("the list contains exactly {int} todos", function (this: TodoWorld, n: number) {
   const body = this.body() as { items?: unknown[] };
-  assert.ok((body.items?.length ?? 0) >= n);
+  assert.equal(body.items?.length ?? 0, n);
 });
 
 Then("the error is problem+json", function (this: TodoWorld) {

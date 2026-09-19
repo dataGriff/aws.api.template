@@ -8,8 +8,8 @@
     "serve": "tsx watch ../../local/server.ts",
     "db:migrate": "node-pg-migrate up -m src/db/migrations --no-lock",
     "db:migrate:down": "node-pg-migrate down -m src/db/migrations --no-lock",
-    "test:unit": "vitest run test/unit",
-    "test:integration": "vitest run test/integration",
+    "test:unit": "vitest run test/unit test/handler --reporter=default --reporter=junit --outputFile=test-results/vitest-unit.xml",
+    "test:integration": "vitest run test/integration --reporter=default --reporter=junit --outputFile=test-results/vitest-integration.xml",
     "test:bdd": "mkdir -p test-results && NODE_OPTIONS=\"--import tsx\" cucumber-js",
     "test:contract": "tsx test/contract/run.ts"
   },

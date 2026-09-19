@@ -1,0 +1,54 @@
+# API Gateway behaviour checks — HAND-WRITTEN (not generated), httpyac-specific
+# (`??` assertions). Run post-deploy by `task smoke URL=<invoke url> ENV=<env>`
+# against a real stage: these behaviours are produced by API Gateway in front
+# of the Lambda (authorizer, gateway responses, CORS, API keys), so the local
+# stub server cannot exercise them. No Cognito user is needed: every request
+# here is expected to be REJECTED (or is public), which is exactly what proves
+# the edge is configured.
+
+### health — public liveness probe, no auth, no API key
+# @name gateway_health
+GET {{baseUrl}}/health
+
+?? status == 200
+?? header content-type includes application/json
+?? js response.parsedBody.status === "ok"
+
+### no token → the Cognito authorizer rejects with the contract's problem+json and CORS
+# @name gateway_unauthenticated
+GET {{baseUrl}}/todos
+x-api-key: {{apiKey}}
+
+?? status == 401
+?? header content-type includes application/problem+json
+?? header access-control-allow-origin exists
+?? js response.parsedBody.status === 401
+?? js typeof response.parsedBody.request_id === "string"
+
+### garbage token → 401, not 500 and not a bare gateway message
+# @name gateway_invalid_token
+GET {{baseUrl}}/todos
+Authorization: Bearer not-a-jwt
+x-api-key: {{apiKey}}
+
+?? status == 401
+?? header content-type includes application/problem+json
+
+### unknown route → gateway response, still problem+json
+# @name gateway_unknown_route
+GET {{baseUrl}}/nope
+x-api-key: {{apiKey}}
+
+?? status in [401, 403, 404]
+?? header content-type includes application/problem+json
+
+### CORS preflight answered by the mock integration with the allow-list
+# @name gateway_preflight
+OPTIONS {{baseUrl}}/todos
+Origin: https://app.example.com
+Access-Control-Request-Method: POST
+
+?? status == 204
+?? header access-control-allow-origin exists
+?? header access-control-allow-methods includes POST
+?? header access-control-allow-headers includes idempotency-key

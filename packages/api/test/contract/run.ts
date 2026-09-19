@@ -16,8 +16,9 @@
 // WAF). That is the opt-in fuzz.yml run against a deployed stage.
 //
 // Hermetic: a fresh container and a random loopback port per run, torn down on
-// exit (including failure / SIGINT). Set HTTP_TEST_DATABASE_URL to reuse an
-// existing empty Postgres instead of Docker (migrations still run).
+// exit (including failure / SIGINT). Set TEST_DATABASE_URL to reuse an existing
+// empty Postgres instead of Docker (migrations still run) — the same switch the
+// integration and BDD suites honour.
 import { spawn, type ChildProcess } from "node:child_process";
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
@@ -27,7 +28,6 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { parse } from "yaml";
-import { runner } from "node-pg-migrate";
 import { runSdkConsumer } from "./sdk-consumer.js";
 
 const execFile = promisify(execFileCb);
@@ -35,7 +35,6 @@ const execFile = promisify(execFileCb);
 const here = dirname(fileURLToPath(import.meta.url));
 const apiDir = join(here, "../..");
 const root = join(apiDir, "../..");
-const migrationsDir = join(apiDir, "src/db/migrations");
 
 const EXAMPLES = process.env.SCHEMATHESIS_EXAMPLES ?? "25";
 const HEALTH_TIMEOUT_MS = 60_000;
@@ -69,28 +68,19 @@ function fail(message: string): never {
 
 // --- 1. Database ------------------------------------------------------------
 async function startDatabase(): Promise<string> {
-  const preset = process.env.HTTP_TEST_DATABASE_URL;
-  if (preset) {
-    console.log("▶ using HTTP_TEST_DATABASE_URL (no container)");
-    await runner({
-      databaseUrl: preset,
-      dir: migrationsDir,
-      direction: "up",
-      migrationsTable: "pgmigrations",
-      noLock: true,
-      log: () => {},
-    });
-    return preset;
-  }
-  console.log("▶ starting Postgres 16 (testcontainers) and applying migrations");
+  console.log(
+    process.env.TEST_DATABASE_URL
+      ? "▶ using TEST_DATABASE_URL (no container) and applying migrations"
+      : "▶ starting Postgres 16 (testcontainers) and applying migrations",
+  );
   // startDb() applies every migration with the real runner and sets DATABASE_URL.
   const { startDb } = await import("../helpers/db.js");
-  const container = await startDb();
+  const db = await startDb();
   cleanups.push(async () => {
-    console.log("▶ stopping Postgres container");
-    await container.stop();
+    console.log("▶ stopping Postgres");
+    await db.stop();
   });
-  return container.getConnectionUri();
+  return db.connectionUri;
 }
 
 // --- 2. Local server --------------------------------------------------------

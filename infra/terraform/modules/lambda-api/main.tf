@@ -43,39 +43,33 @@ data "aws_iam_policy_document" "app" {
     actions   = ["xray:PutTraceSegments", "xray:PutTelemetryRecords"]
     resources = ["*"]
   }
-  dynamic "statement" {
-    for_each = var.secret_arn == null ? [] : [1]
-    content {
-      sid       = "ReadSecret"
-      actions   = ["secretsmanager:GetSecretValue"]
-      resources = [var.secret_arn]
-    }
+  # NOTE: conditions on these blocks use KNOWN booleans. ARNs/ids of resources
+  # created in the same apply are unknown at plan time, and count/for_each
+  # cannot depend on them ("Invalid for_each argument" on a first apply).
+  statement {
+    sid       = "ReadSecret"
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = [var.secret_arn]
   }
   dynamic "statement" {
-    for_each = var.rds_proxy_resource_id == null ? [] : [1]
+    for_each = var.rds_iam_auth ? [1] : []
     content {
       sid       = "RdsIamConnect"
       actions   = ["rds-db:connect"]
       resources = ["arn:${local.partition}:rds-db:${var.region}:${local.account_id}:dbuser:${var.rds_proxy_resource_id}/${var.db_user}"]
     }
   }
-  dynamic "statement" {
-    for_each = var.idempotency_table_arn == null ? [] : [1]
-    content {
-      sid       = "Idempotency"
-      actions   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem"]
-      resources = [var.idempotency_table_arn]
-    }
+  statement {
+    sid       = "Idempotency"
+    actions   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem"]
+    resources = [var.idempotency_table_arn]
   }
   # Decrypt the CMK-encrypted secret / DynamoDB table (data key) and the
   # function's own environment variables (ops key).
-  dynamic "statement" {
-    for_each = compact([var.data_kms_key_arn, var.kms_key_arn])
-    content {
-      sid       = "Kms${index(compact([var.data_kms_key_arn, var.kms_key_arn]), statement.value)}"
-      actions   = ["kms:Decrypt", "kms:GenerateDataKey", "kms:DescribeKey"]
-      resources = [statement.value]
-    }
+  statement {
+    sid       = "Kms"
+    actions   = ["kms:Decrypt", "kms:GenerateDataKey", "kms:DescribeKey"]
+    resources = [var.data_kms_key_arn, var.kms_key_arn]
   }
 }
 
@@ -134,9 +128,9 @@ resource "aws_lambda_function" "api" {
       DB_NAME                      = var.db_name
       DB_USER                      = var.db_user
       DB_SSL                       = "true"
-      DB_IAM_AUTH                  = var.rds_proxy_resource_id == null ? "false" : "true"
-      DB_SECRET_ARN                = var.secret_arn == null ? "" : var.secret_arn
-      IDEMPOTENCY_TABLE            = var.idempotency_table_name == null ? "" : var.idempotency_table_name
+      DB_IAM_AUTH                  = var.rds_iam_auth ? "true" : "false"
+      DB_SECRET_ARN                = var.secret_arn
+      IDEMPOTENCY_TABLE            = var.idempotency_table_name
     }, var.extra_environment)
   }
 

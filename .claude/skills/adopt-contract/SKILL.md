@@ -59,7 +59,8 @@ The Todo domain is intentionally thin — mirror it for your resource(s):
 ## 5. Rewrite the behavioural specs (= acceptance criteria)
 
 - `packages/api/test/features/*.feature` — express your acceptance criteria as Gherkin scenarios; they
-  ARE the tests. Update `steps/`.
+  ARE the tests. Update `steps/`. Each scenario starts from an empty table (the `Before` hook truncates),
+  so assert exact counts.
 - Update unit + integration + contract tests to your resources. Keep the tenant-isolation scenarios
   (same user / other tenant AND same tenant / other user).
 
@@ -102,6 +103,8 @@ open a draft PR, and hand back.
 - [ ] BDD features rewritten as the new acceptance criteria
 - [ ] custom claims adjusted if required
 - [ ] `test/contract/sdk-consumer.ts` rewritten for the new resources
+- [ ] `infra/terraform/stack/tests/*.tftest.hcl` still pass (`task tf:test`); extend if you add guardrails
+- [ ] `collections/gateway.http` still describes your gateway (hand-written; the generated files are separate)
 - [ ] `task test:contract` green (every returned status declared in the contract; create→by-id `links` present)
 - [ ] `task contract:compat` outcome understood (a replaced contract IS breaking; later PRs are protected)
 - [ ] `task ci` green

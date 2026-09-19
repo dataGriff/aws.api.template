@@ -107,10 +107,11 @@ jobs:
             task db:migrate
           fi
 
-      # Post-deploy smoke test against the deployed stage (unauthenticated
-      # health check, so it needs no token).
-      - name: Smoke test
+      # Post-deploy smoke test against the deployed stage: health, plus the API
+      # Gateway behaviours the local test layers cannot see (authorizer 401 as
+      # problem+json with CORS, gateway responses, preflight). Needs no Cognito user.
+      - name: Smoke test (health + gateway behaviour)
         if: ${{ env.ENV != 'prod' }}
         run: |
           URL=$(terraform -chdir="$TF_DIR" output -raw api_invoke_url)
-          task smoke URL="$URL"
+          task smoke ENV="$ENV" URL="$URL"
