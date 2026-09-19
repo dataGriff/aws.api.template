@@ -1,9 +1,11 @@
 # Single source of truth for every command.
 # Git hooks (lefthook) and GitHub Actions call ONLY `task <name>` — never inline
 # shell — so local and CI run identical code paths. Tool versions come from mise.
+#
+# Commands are echoed (`task: [name] cmd`) so a log always shows which gate ran
+# which tool. Every gate FAILS on findings; accepted findings live in
+# .checkov.yaml / .trivyignore / `nosemgrep` comments with a written reason.
 version: "3"
-
-silent: true
 
 vars:
   TF_DIR: infra/terraform
@@ -202,12 +204,11 @@ tasks:
       # so we don't scan dependency-shipped Dockerfiles or .terraform providers.
       - trivy fs --scanners vuln,misconfig --exit-code 1 --severity HIGH,CRITICAL --skip-dirs "**/node_modules" --skip-dirs "**/.terraform" --skip-dirs "**/dist" .
   security:code:
-    desc: Static analysis (semgrep, advisory)
+    desc: "Static analysis (semgrep) — fails on findings; suppress with a nosemgrep comment + reason"
     cmds:
-      # Advisory: surfaces findings without failing the build (auto's IaC/CI
-      # policy rules are opinionated and overlap Trivy). Hard code-level SAST is
-      # gated by eslint-plugin-security in `task lint`.
-      - semgrep --config auto || true
+      # `--error` exits non-zero on findings. Paths excluded in .semgrepignore.
+      - mkdir -p test-results
+      - semgrep --config auto --error --metrics=on --text --json-output=test-results/semgrep.json
   sbom:
     desc: Generate a CycloneDX SBOM
     cmds:
@@ -232,13 +233,15 @@ tasks:
     vars:
       TF_ROOTS: envs/dev envs/staging envs/prod bootstrap
   tf:scan:
-    desc: IaC security scan (Trivy config + Checkov)
+    desc: IaC security scan (Trivy config + Checkov) — both fail on findings
     cmds:
-      # Trivy (which absorbed tfsec) gates on serious misconfigurations.
+      # Trivy (which absorbed tfsec) gates on serious misconfigurations; accepted
+      # exceptions are documented in .trivyignore.
       - trivy config --exit-code 1 --severity HIGH,CRITICAL {{.TF_DIR}}
-      # Checkov reports its opinionated policy findings without failing the build
-      # (many relate to opt-in features that are intentionally off by default).
-      - checkov -d {{.TF_DIR}} --quiet --compact --soft-fail
+      # Checkov policy + justified skips live in .checkov.yaml. In GitHub Actions
+      # the failed checks are also rendered as a Markdown table in the job summary.
+      - mkdir -p test-results
+      - checkov -d {{.TF_DIR}} --config-file .checkov.yaml -o cli -o github_failed_only --output-file-path console,test-results
   tf:plan:
     desc: "Terraform plan for an env, e.g. task tf:plan ENV=dev (needs TF_STATE_BUCKET)"
     dir: "{{.TF_DIR}}/envs/{{.ENV}}"

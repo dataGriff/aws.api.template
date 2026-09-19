@@ -17,14 +17,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0 # gitleaks (task security:secrets) scans history, same as the local hook
           persist-credentials: false
 
       # Installs every tool pinned in .mise.toml, so CI uses the SAME versions
       # as local dev and the git hooks.
-      - uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2.4.4
+      - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3.6.3
         with:
           install: true
           cache: true
@@ -32,9 +32,33 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # The one gate. Identical to running `task ci` on a laptop:
-      # format, lint, typecheck, spec lint, gen-drift, secrets, unit,
-      # build, integration (testcontainers), BDD, contract, terraform validate
-      # (all envs + bootstrap, tflint recursive), terraform scan, dependency scan.
-      - name: task ci
-        run: task ci
+      # The gates below are exactly the sub-tasks of `task ci` (what the pre-push
+      # hook runs), one step each so the Actions UI shows which gate failed and
+      # its log is collapsible on its own. Every gate fails on findings.
+      - name: "check: format, lint, typecheck, spec lint, gen drift, secrets, unit"
+        run: task check
+      - name: "build: Lambda bundles + SDK"
+        run: task build
+      - name: "test: integration (real Postgres via testcontainers)"
+        run: task test:integration
+      - name: "test: BDD acceptance scenarios"
+        run: task test:bdd
+      - name: "test: contract conformance"
+        run: task test:contract
+      - name: "terraform: fmt, validate (all envs), tflint"
+        run: task tf:validate
+      - name: "terraform: security scan (trivy + checkov)"
+        run: task tf:scan
+      - name: "dependencies: vulnerability scan (trivy)"
+        run: task security:deps
+
+      - name: Upload test reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: test-results
+          path: |
+            test-results/
+            packages/api/test-results/
+          if-no-files-found: ignore
+          retention-days: 14

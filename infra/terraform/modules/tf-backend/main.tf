@@ -10,10 +10,29 @@ terraform {
 #
 # Everything here is prevent_destroy: destroying the bucket or scheduling the
 # key for deletion would make every environment's state unrecoverable.
+data "aws_caller_identity" "current" {}
+data "aws_partition" "current" {}
+
+data "aws_iam_policy_document" "kms" {
+  #checkov:skip=CKV_AWS_109:Standard AWS key policy — the account root principal must keep kms:* or the key becomes unmanageable; access is delegated through IAM
+  #checkov:skip=CKV_AWS_111:Standard AWS key policy — the account root principal must keep kms:* or the key becomes unmanageable; access is delegated through IAM
+  #checkov:skip=CKV_AWS_356:Standard AWS key policy — resources must be "*" inside a key policy (it applies to the key itself)
+  statement {
+    sid       = "AccountAdmin"
+    actions   = ["kms:*"]
+    resources = ["*"]
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:root"]
+    }
+  }
+}
+
 resource "aws_kms_key" "state" {
   description             = "Terraform state bucket encryption"
   deletion_window_in_days = 30
   enable_key_rotation     = true
+  policy                  = data.aws_iam_policy_document.kms.json
   tags                    = var.tags
   lifecycle {
     prevent_destroy = true

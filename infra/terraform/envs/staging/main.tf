@@ -24,6 +24,7 @@ module "stack" {
   callback_urls                 = var.callback_urls
   logout_urls                   = var.logout_urls
   manage_apigw_account_settings = var.manage_apigw_account_settings
+  log_retention_days            = var.log_retention_days
 
   # staging mirrors prod topology but keeps a test client for E2E/fuzz.
   enable_test_client  = true

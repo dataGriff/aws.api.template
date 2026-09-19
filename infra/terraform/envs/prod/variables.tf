@@ -77,3 +77,7 @@ variable "manage_apigw_account_settings" {
   default     = true
   description = "Exactly ONE env per AWS account+region may manage the API Gateway account role; set false in the others."
 }
+variable "log_retention_days" {
+  type    = number
+  default = 365
+}

@@ -17,6 +17,9 @@ custom_domain_enabled    = false
 # hosted_zone_id = "Z0123456789ABCDEFGHIJ"
 # alarm_email    = "alerts@example.com"
 
+# Shorter log retention than the 365-day prod default.
+log_retention_days = 14
+
 # Browser clients: the hosted-UI redirect and the CORS origin of your front end.
 cors_origin   = "*"
 callback_urls = ["http://localhost:3000/callback"]

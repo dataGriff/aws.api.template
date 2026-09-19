@@ -17,3 +17,12 @@ explores the input space (given a valid token, scoped to conformance — it neve
 Docker daemon. `task check` (pre-commit) runs without Docker; `task ci` (pre-push) does not.
 Spectral/Redocly lint the contract itself in `task spec:lint`; Prism (in `local/docker-compose.yml`)
 is a mock for consumers, not a test oracle.
+
+## Reading results in CI
+
+The CI workflow runs the same sub-tasks as `task ci`, but as one named step per gate, so the Actions
+UI shows which gate failed and each log is collapsible on its own. Task echoes every command it runs
+(`task: [gate] tool ...`). vitest emits GitHub annotations for failing assertions automatically;
+cucumber writes `packages/api/test-results/cucumber.ndjson`, Checkov writes a Markdown table of failed
+checks to `test-results/`, and both are uploaded as the `test-results` artifact. Scanner findings fail
+the job — there is no advisory-only output to scroll past.

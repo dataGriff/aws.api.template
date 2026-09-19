@@ -9,6 +9,6 @@ import { todoSchema } from "./todoSchema.ts";
 import { z } from "zod";
 
 export const todoPageSchema = z.object({
-    "items": z.array(z.lazy(() => todoSchema)),
+    "items": z.array(z.lazy(() => todoSchema)).max(100),
 "next_cursor": z.string().describe("Pass as `cursor` to fetch the next page; null when no more pages").nullable()
     }) as unknown as ToZod<TodoPage>

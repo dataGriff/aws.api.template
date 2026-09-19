@@ -5,9 +5,12 @@ terraform {
   }
 }
 
+# Encrypted with a CMK whose policy lets cloudwatch.amazonaws.com publish
+# (the AWS-managed aws/sns key cannot be used by CloudWatch alarms).
 resource "aws_sns_topic" "alarms" {
-  name = "${var.name}-alarms"
-  tags = var.tags
+  name              = "${var.name}-alarms"
+  kms_master_key_id = var.kms_key_arn
+  tags              = var.tags
 }
 
 # Optional email subscription so alarms actually page someone. Provide

@@ -1,0 +1,8 @@
+# Paths Semgrep (task security:code) does not scan. Keep the reasons.
+# Default ignores (node_modules, .git, dist, ...) still apply.
+:include .gitignore
+# Generated from the contract by `task gen`; the Redoc bundle is loaded from
+# Redocly's CDN without an integrity hash and is not ours to change.
+docs/api-reference/
+# Generated code (kubb) — reviewed via the contract, not the output.
+packages/*/src/generated/

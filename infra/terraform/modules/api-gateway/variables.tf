@@ -33,7 +33,12 @@ variable "manage_account_settings" {
 }
 variable "log_retention_days" {
   type    = number
-  default = 30
+  default = 365
+}
+variable "kms_key_arn" {
+  type        = string
+  default     = null
+  description = "CMK for the access-log log group"
 }
 variable "tags" {
   type    = map(string)

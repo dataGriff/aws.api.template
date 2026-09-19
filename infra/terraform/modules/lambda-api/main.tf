@@ -67,6 +67,16 @@ data "aws_iam_policy_document" "app" {
       resources = [var.idempotency_table_arn]
     }
   }
+  # Decrypt the CMK-encrypted secret / DynamoDB table (data key) and the
+  # function's own environment variables (ops key).
+  dynamic "statement" {
+    for_each = compact([var.data_kms_key_arn, var.kms_key_arn])
+    content {
+      sid       = "Kms${index(compact([var.data_kms_key_arn, var.kms_key_arn]), statement.value)}"
+      actions   = ["kms:Decrypt", "kms:GenerateDataKey", "kms:DescribeKey"]
+      resources = [statement.value]
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "app" {
@@ -77,6 +87,7 @@ resource "aws_iam_role_policy" "app" {
 resource "aws_cloudwatch_log_group" "lambda" {
   name              = "/aws/lambda/${var.name}-api"
   retention_in_days = var.log_retention_days
+  kms_key_id        = var.kms_key_arn
   tags              = var.tags
 }
 
@@ -101,6 +112,8 @@ resource "aws_lambda_function" "api" {
   # Caps how many connections a burst can open against the DB/proxy and stops
   # this function starving the account's concurrency pool. -1 = unreserved.
   reserved_concurrent_executions = var.reserved_concurrency
+  # Environment variables (DB host, secret ARN...) encrypted with our CMK at rest.
+  kms_key_arn = var.kms_key_arn
 
   vpc_config {
     subnet_ids         = var.subnet_ids

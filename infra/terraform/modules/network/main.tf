@@ -19,6 +19,65 @@ resource "aws_vpc" "this" {
   tags                 = merge(var.tags, { Name = var.name })
 }
 
+# The VPC's default security group allows all traffic between its members by
+# default. Nothing here uses it, so strip every rule: a resource accidentally
+# launched without an explicit SG then has no network access at all.
+resource "aws_default_security_group" "this" {
+  vpc_id = aws_vpc.this.id
+  tags   = merge(var.tags, { Name = "${var.name}-default-locked" })
+}
+
+# --- VPC flow logs ------------------------------------------------------------
+resource "aws_cloudwatch_log_group" "flow" {
+  #checkov:skip=CKV_AWS_338:Retention is var.log_retention_days (365 by default, shortened only in dev/staging tfvars); Checkov does not resolve it through this module call
+  name              = "/aws/vpc/${var.name}/flow-logs"
+  retention_in_days = var.log_retention_days
+  kms_key_id        = var.kms_key_arn
+  tags              = var.tags
+}
+
+data "aws_iam_policy_document" "flow_assume" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["vpc-flow-logs.amazonaws.com"]
+    }
+  }
+}
+
+data "aws_iam_policy_document" "flow" {
+  statement {
+    actions = [
+      "logs:CreateLogStream",
+      "logs:PutLogEvents",
+      "logs:DescribeLogGroups",
+      "logs:DescribeLogStreams",
+    ]
+    resources = ["${aws_cloudwatch_log_group.flow.arn}:*"]
+  }
+}
+
+resource "aws_iam_role" "flow" {
+  name_prefix        = "${var.name}-flow-"
+  assume_role_policy = data.aws_iam_policy_document.flow_assume.json
+  tags               = var.tags
+}
+
+resource "aws_iam_role_policy" "flow" {
+  role   = aws_iam_role.flow.id
+  policy = data.aws_iam_policy_document.flow.json
+}
+
+resource "aws_flow_log" "this" {
+  vpc_id               = aws_vpc.this.id
+  traffic_type         = "ALL"
+  log_destination_type = "cloud-watch-logs"
+  log_destination      = aws_cloudwatch_log_group.flow.arn
+  iam_role_arn         = aws_iam_role.flow.arn
+  tags                 = merge(var.tags, { Name = var.name })
+}
+
 resource "aws_internet_gateway" "this" {
   vpc_id = aws_vpc.this.id
   tags   = merge(var.tags, { Name = var.name })
@@ -90,21 +149,18 @@ resource "aws_route_table_association" "private" {
 }
 
 # --- VPC endpoints so Lambda reaches AWS APIs without NAT --------------------
+# Ingress only: security groups are stateful, so endpoint replies flow back
+# without an egress rule.
 resource "aws_security_group" "endpoints" {
   name_prefix = "${var.name}-vpce-"
   vpc_id      = aws_vpc.this.id
   description = "Interface VPC endpoints"
   ingress {
+    description = "HTTPS from inside the VPC to the endpoint ENIs"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
     cidr_blocks = [var.cidr]
-  }
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
   }
   tags = merge(var.tags, { Name = "${var.name}-vpce" })
 }

@@ -152,8 +152,9 @@ variable "api_quota_limit" {
   default = 100000
 }
 variable "log_retention_days" {
-  type    = number
-  default = 30
+  type        = number
+  default     = 365
+  description = "CloudWatch retention for every log group (API access, Lambda, trigger, WAF, VPC flow). Prod-grade default; dev tfvars shorten it."
 }
 variable "disable_execute_api_endpoint" {
   type        = bool

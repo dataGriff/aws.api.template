@@ -16,12 +16,18 @@ resource "aws_globalaccelerator_accelerator" "this" {
   tags            = var.tags
 }
 
+# Internal NLB in front of the execute-api endpoint ENIs. Access logging is
+# deliberately off: it needs an S3 bucket, and the API Gateway access log
+# already records every request this NLB forwards.
+# nosemgrep: terraform.aws.security.aws-elb-access-logs-not-enabled.aws-elb-access-logs-not-enabled
 resource "aws_lb" "nlb" {
-  name               = substr("${var.name}-nlb", 0, 32)
-  internal           = true
-  load_balancer_type = "network"
-  subnets            = var.subnet_ids
-  tags               = var.tags
+  name                             = substr("${var.name}-nlb", 0, 32)
+  internal                         = true
+  load_balancer_type               = "network"
+  subnets                          = var.subnet_ids
+  enable_cross_zone_load_balancing = true
+  enable_deletion_protection       = var.deletion_protection
+  tags                             = var.tags
 }
 
 resource "aws_lb_target_group" "this" {

@@ -18,3 +18,12 @@ variable "tags" {
   type    = map(string)
   default = {}
 }
+variable "kms_key_arn" {
+  type        = string
+  default     = null
+  description = "CMK for the flow-log log group"
+}
+variable "log_retention_days" {
+  type    = number
+  default = 365
+}

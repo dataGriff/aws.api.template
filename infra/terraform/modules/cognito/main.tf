@@ -30,10 +30,33 @@ resource "aws_iam_role_policy_attachment" "pretoken_logs" {
   policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+data "aws_iam_policy_document" "pretoken" {
+  statement {
+    sid       = "Tracing"
+    actions   = ["xray:PutTraceSegments", "xray:PutTelemetryRecords"]
+    resources = ["*"]
+  }
+  dynamic "statement" {
+    for_each = var.kms_key_arn == null ? [] : [1]
+    content {
+      sid       = "DecryptEnvironment"
+      actions   = ["kms:Decrypt"]
+      resources = [var.kms_key_arn]
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "pretoken" {
+  role   = aws_iam_role.pretoken.id
+  policy = data.aws_iam_policy_document.pretoken.json
+}
+
 # Managed explicitly so retention is bounded (an auto-created group never expires).
 resource "aws_cloudwatch_log_group" "pretoken" {
+  #checkov:skip=CKV_AWS_338:Retention is var.log_retention_days (365 by default, shortened only in dev/staging tfvars); Checkov does not resolve it through this module call
   name              = "/aws/lambda/${var.name}-pretoken"
   retention_in_days = var.log_retention_days
+  kms_key_id        = var.kms_key_arn
   tags              = var.tags
 }
 
@@ -53,6 +76,8 @@ resource "aws_lambda_function" "pretoken" {
   timeout          = 5
   memory_size      = 128
   architectures    = ["arm64"]
+  kms_key_arn      = var.kms_key_arn
+  tracing_config { mode = "Active" }
   environment {
     variables = { NODE_OPTIONS = "--enable-source-maps" }
   }

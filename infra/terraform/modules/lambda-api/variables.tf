@@ -50,7 +50,7 @@ variable "reserved_concurrency" {
 }
 variable "log_retention_days" {
   type    = number
-  default = 30
+  default = 365
 }
 variable "extra_environment" {
   type    = map(string)
@@ -59,4 +59,14 @@ variable "extra_environment" {
 variable "tags" {
   type    = map(string)
   default = {}
+}
+variable "kms_key_arn" {
+  type        = string
+  default     = null
+  description = "CMK for the log group and the function's environment variables"
+}
+variable "data_kms_key_arn" {
+  type        = string
+  default     = null
+  description = "CMK protecting the DB secret and idempotency table (grants kms:Decrypt to the role)"
 }

@@ -20,5 +20,5 @@ export const problemSchema = z.object({
 "errors": z.array(z.object({
     "field": z.string(),
 "message": z.string()
-    })).describe("Field-level validation errors").optional()
+    })).max(100).describe("Field-level validation errors").optional()
     }).describe("RFC 7807 problem detail") as unknown as ToZod<Problem>

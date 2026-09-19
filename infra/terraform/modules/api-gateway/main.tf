@@ -26,6 +26,9 @@ resource "aws_api_gateway_rest_api" "this" {
   # front door that bypasses the domain's TLS policy and base-path mapping.
   disable_execute_api_endpoint = var.disable_execute_api_endpoint
   tags                         = var.tags
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_lambda_permission" "apigw" {
@@ -51,6 +54,7 @@ resource "aws_api_gateway_deployment" "this" {
 resource "aws_cloudwatch_log_group" "access" {
   name              = "/aws/apigateway/${var.name}"
   retention_in_days = var.log_retention_days
+  kms_key_id        = var.kms_key_arn
   tags              = var.tags
 }
 

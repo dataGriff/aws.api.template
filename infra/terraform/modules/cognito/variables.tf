@@ -48,7 +48,12 @@ variable "refresh_token_validity_days" {
 }
 variable "log_retention_days" {
   type    = number
-  default = 30
+  default = 365
+}
+variable "kms_key_arn" {
+  type        = string
+  default     = null
+  description = "CMK for the trigger's log group and environment variables"
 }
 variable "tags" {
   type    = map(string)
