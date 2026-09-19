@@ -71,16 +71,21 @@ The Todo domain is intentionally thin — mirror it for your resource(s):
 ## 7. Prove it
 
 ```bash
-task ci          # full gate: lint, typecheck, gen-drift, unit (all packages), integration, BDD, contract, HTTP, tf validate/scan
-task test:http   # just the HTTP layer: Schemathesis + .http collection over real HTTP against local/server.ts
-task test:fuzz   # optional: property fuzzing against a deployed stage
+task ci             # full gate: lint, typecheck, contract compat, gen-drift, unit (all packages), integration, BDD, contract, tf validate/scan
+task test:contract  # just the contract layer: Schemathesis + generated SDK + .http collection over real HTTP against local/server.ts
+task contract:compat # breaking-change check of api/openapi.yaml vs the base branch (oasdiff)
+task test:fuzz      # optional: property fuzzing against a deployed stage
 ```
 
-The HTTP layer derives everything from the contract (operations, declared statuses, the `.http`
-collection), so it needs no edits for a new API. Two things keep it useful: declare `links` from your
-create operation's 201 to the by-id operations (`$response.body#/<id>`), so Schemathesis reaches their
-success paths; and keep every status your handler can return declared per operation, because the layer
-fails on any undeclared status.
+The contract layer derives Schemathesis and the `.http` collection from the contract, so those need no
+edits. The **SDK consumer walk** (`packages/api/test/contract/sdk-consumer.ts`) is hand-written against
+the Todo operations: rewrite it for your resources (create → get → list → update → delete → error
+paths, each response parsed with the generated zod). Two things keep the layer useful: declare `links`
+from your create operation's 201 to the by-id operations (`$response.body#/<id>`), so Schemathesis
+reaches their success paths; and keep every status your handler can return declared per operation,
+because the layer fails on any undeclared status. Replacing the contract wholesale is a breaking change
+by definition — run `CONTRACT_BASE_REF=HEAD task contract:compat` on the first commit, or accept the
+failure on that one PR knowingly; after that the gate protects your consumers.
 
 `task ci` needs Docker (testcontainers). Without it, run `task check` plus `task build` and
 `task tf:validate`, and let CI run the container-backed layers.
@@ -96,6 +101,8 @@ open a draft PR, and hand back.
 - [ ] migrations, repo, domain, router replaced (+ `local/server.ts` ROUTES, `scripts/mint-token.mjs` claims)
 - [ ] BDD features rewritten as the new acceptance criteria
 - [ ] custom claims adjusted if required
-- [ ] `task test:http` green (every returned status declared in the contract; create→by-id `links` present)
+- [ ] `test/contract/sdk-consumer.ts` rewritten for the new resources
+- [ ] `task test:contract` green (every returned status declared in the contract; create→by-id `links` present)
+- [ ] `task contract:compat` outcome understood (a replaced contract IS breaking; later PRs are protected)
 - [ ] `task ci` green
 - [ ] docs updated

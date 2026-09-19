@@ -11,8 +11,7 @@
     "test:unit": "vitest run test/unit",
     "test:integration": "vitest run test/integration",
     "test:bdd": "mkdir -p test-results && NODE_OPTIONS=\"--import tsx\" cucumber-js",
-    "test:contract": "vitest run test/contract",
-    "test:http": "tsx test/http/run.ts"
+    "test:contract": "tsx test/contract/run.ts"
   },
   "dependencies": {
     "@app/contracts": "workspace:*",
@@ -31,6 +30,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@app/sdk": "workspace:*",
     "@cucumber/cucumber": "^11.1.0",
     "@testcontainers/postgresql": "^10.13.2",
     "@types/aws-lambda": "^8.10.145",

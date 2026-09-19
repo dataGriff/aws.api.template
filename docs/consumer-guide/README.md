@@ -48,7 +48,27 @@ npx openapi-typescript api/openapi.yaml -o ./todo-api.d.ts
 ```
 
 The generated SDK exposes typed functions per `operationId` (`listTodos`, `createTodo`, …) plus request
-and response types.
+and response types. Build a client once and pass it to every call; non-2xx responses surface as a typed
+`ApiError` carrying the RFC 7807 problem body and the `x-request-id` for support:
+
+```ts
+import { ApiError, createClient, createTodo, getTodo } from "@app/sdk";
+
+const { client } = createClient({ baseURL: "https://api.example.com/v1", token, apiKey });
+const todo = await createTodo(
+  { title: "x" },
+  { "idempotency-key": crypto.randomUUID() },
+  { client },
+);
+try {
+  await getTodo(todo.todo_id, { client });
+} catch (e) {
+  if (e instanceof ApiError && e.status === 404) console.log(e.problem?.detail, e.requestId);
+}
+```
+
+The SDK is exercised against the real service on every PR (`task test:contract`), so what you install
+is what the provider was verified against.
 
 ## 4. Develop against the mock
 

@@ -1,11 +1,15 @@
-// HTTP-level test layer: exercises the API over REAL HTTP against the local
+// Contract test layer: exercises the API over REAL HTTP against the local
 // stack, so the gate does not rely solely on in-process handler invocation.
 //
 //   Postgres (testcontainers)  <-  local/server.ts (stub authorizer, loopback)
 //        ^ every migration via node-pg-migrate      ^
 //        |                                          |  real HTTP
-//        +---- Schemathesis (--checks all) ---------+
-//        +---- httpyac (generated .http collection) +
+//        +-- provider: Schemathesis (--checks all, stateful via links)
+//        +-- consumer: the generated SDK through every operation (sdk-consumer.ts)
+//        +-- collection: httpyac replays the generated .http files
+//
+// Backward compatibility of the contract itself is a separate, Docker-free
+// gate: `task contract:compat` (oasdiff against the base branch).
 //
 // What it does NOT cover: anything API Gateway does in front of the Lambda
 // (Cognito authorizer, request validator, gateway responses, CORS, throttling,
@@ -24,6 +28,7 @@ import { dirname, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { parse } from "yaml";
 import { runner } from "node-pg-migrate";
+import { runSdkConsumer } from "./sdk-consumer.js";
 
 const execFile = promisify(execFileCb);
 
@@ -178,7 +183,9 @@ function run(cmd: string, args: string[], env: NodeJS.ProcessEnv): Promise<numbe
 }
 
 async function runSchemathesis(baseUrl: string, token: string): Promise<void> {
-  console.log(`▶ schemathesis --checks all (${EXAMPLES} examples per operation)`);
+  console.log(
+    `▶ provider conformance: schemathesis --checks all (${EXAMPLES} examples per operation)`,
+  );
   const code = await run("./scripts/schemathesis.sh", [], {
     API_URL: baseUrl,
     API_TOKEN: token,
@@ -308,12 +315,13 @@ try {
   const baseUrl = await startServer(databaseUrl, port);
   const token = await mintToken();
   await runSchemathesis(baseUrl, token);
+  await runSdkConsumer(baseUrl, token);
   await runHttpCollection(baseUrl, token);
-  console.log("✔ HTTP layer passed");
+  console.log("✔ contract layer passed (provider conformance, SDK consumer, .http collection)");
   await cleanupAll();
   process.exit(0);
 } catch (err) {
-  console.error("✖ HTTP layer failed:", err instanceof Error ? err.message : err);
+  console.error("✖ contract layer failed:", err instanceof Error ? err.message : err);
   await cleanupAll();
   process.exit(1);
 }

@@ -24,12 +24,13 @@ tasks:
   # Aggregate gates
   # ---------------------------------------------------------------------------
   check:
-    desc: "Fast pre-commit gate: format, lint, typecheck, spec lint, gen-drift, secrets, unit"
+    desc: "Fast pre-commit gate: format, lint, typecheck, spec lint, contract compat, gen-drift, secrets, unit"
     cmds:
       - task: format:check
       - task: lint
       - task: typecheck
       - task: spec:lint
+      - task: contract:compat
       - task: gen:check
       - task: security:secrets
       - task: test:unit
@@ -42,7 +43,6 @@ tasks:
       - task: test:integration
       - task: test:bdd
       - task: test:contract
-      - task: test:http
       - task: tf:validate
       - task: tf:scan
       - task: security:deps
@@ -78,6 +78,10 @@ tasks:
     desc: Lint the OpenAPI contract (spectral rules incl. snake_case)
     cmds:
       - redocly lint api/openapi.yaml
+  contract:compat:
+    desc: "Fail on BREAKING contract changes vs the base branch (oasdiff); CONTRACT_BASE_REF overrides the base"
+    cmds:
+      - ./scripts/contract-compat.sh
   gen:
     desc: "Regenerate everything from the contract (contracts, SDK, mock cfg, docs, .http)"
     cmds:
@@ -119,13 +123,12 @@ tasks:
   # Tests (layers kept distinct — see docs/testing)
   # ---------------------------------------------------------------------------
   test:
-    desc: Run unit + integration + BDD + contract + HTTP
+    desc: Run unit + integration + BDD + contract
     cmds:
       - task: test:unit
       - task: test:integration
       - task: test:bdd
       - task: test:contract
-      - task: test:http
   test:unit:
     desc: Unit tests (pure logic, no I/O) — every workspace package that defines test:unit
     cmds:
@@ -139,15 +142,13 @@ tasks:
     cmds:
       - pnpm --filter @app/api test:bdd
   test:contract:
-    desc: "Contract conformance: real handler responses validated against the generated schemas"
+    desc: "Contract tests over real HTTP against local/server.ts + throwaway Postgres (Docker): Schemathesis provider conformance, generated-SDK consumer conformance, .http collection replay"
     cmds:
+      # The consumer test imports the SDK exactly as a consumer would (its built dist).
+      - pnpm --filter @app/sdk build
+      # Orchestrated by packages/api/test/contract/run.ts: container, migrations,
+      # server on a free loopback port, stub token, schemathesis, SDK, httpyac, teardown.
       - pnpm --filter @app/api test:contract
-  test:http:
-    desc: "HTTP layer: Schemathesis + the generated .http collection over real HTTP against local/server.ts + a throwaway Postgres (Docker)"
-    cmds:
-      # Orchestrated by packages/api/test/http/run.ts: container, migrations,
-      # server on a free loopback port, stub token, schemathesis, httpyac, teardown.
-      - pnpm --filter @app/api test:http
   test:fuzz:
     desc: "Property-based fuzzing (Schemathesis) against a DEPLOYED stage — nightly / on-spec-change"
     cmds:
