@@ -2,6 +2,59 @@
 
 Runbooks for deploying and operating the API.
 
+## First-time setup (bootstrap)
+
+Run this **once per AWS account**, before any deploy. It creates **one isolated state backend per
+environment** (a separate S3 bucket, KMS key and DynamoDB lock table each), the GitHub OIDC provider,
+and one deploy role per environment — with each deploy role scoped to **only its own env's state**
+(dev cannot read or write staging/prod state). It uses a **local** backend (it's the chicken-and-egg
+step that creates the backends the envs then use), so its state lives on disk in
+`infra/terraform/bootstrap` — you only re-run it when the backends or the deploy roles change.
+
+The backend names are **derived**, so you never pick a globally-unique bucket by hand:
+
+| Resource   | Name                                       |
+| ---------- | ------------------------------------------ |
+| State S3   | `<service_name>-tfstate-<env>-<account_id>` |
+| Lock table | `<service_name>-tflock-<env>`              |
+| KMS alias  | `alias/<service_name>-tfstate-<env>`       |
+
+`<service_name>` is your `service_name` (e.g. `todo-api`), the value in each env's `terraform.tfvars`.
+The deploy tasks recompute these exact names on every `init`, so there are **no state secrets** to copy
+around.
+
+- **Prerequisites**:
+  - Local **admin** AWS credentials for the target account (the deploy roles it creates get broad
+    rights — see `infra/terraform/bootstrap/main.tf`).
+  - The three GitHub Environments (`dev`, `staging`, `prod`) created in repo **Settings → Environments**,
+    with protection rules / required reviewers on `staging` and `prod` (that's where the deploy gating
+    lives).
+- **Run it** (`SERVICE_NAME` defaults to `todo-api`; set it to match your `service_name` if you've
+  re-skinned):
+
+  ```sh
+  task tf:bootstrap SERVICE_NAME=<service_name> GITHUB_REPOSITORY=<owner/repo>
+  ```
+
+  `GITHUB_REPOSITORY` **must** be your repo — the OIDC trust is scoped to
+  `repo:<owner>/<repo>:environment:<env>`, so the wrong value means every deploy silently fails to
+  assume the role.
+- **Wire the one secret into each GitHub Environment** — set the env's entry from the
+  `deploy_role_arns` output (a map keyed by environment):
+
+  | `terraform output`         | GitHub Environment setting | Type   |
+  | -------------------------- | -------------------------- | ------ |
+  | `deploy_role_arns[<env>]`  | `AWS_DEPLOY_ROLE_ARN`      | secret |
+  | (optional) in-VPC DB URL   | `MIGRATION_DATABASE_URL`   | secret |
+  | (optional) region override | `AWS_REGION`               | var    |
+
+  The `state_buckets` / `lock_tables` / `state_kms_aliases` outputs are printed for reference only —
+  the deploy tasks derive them, so you don't set them anywhere.
+- **Deploy locally** (optional): with AWS credentials for the account, just `task tf:plan ENV=dev` — it
+  reads `service_name` from that env's `terraform.tfvars` and resolves the account id itself.
+
+## Deploy
+
 - **Deploy**: the Deploy workflow runs only after the CI workflow has passed on `main` (`dev`), or on
   manual dispatch for `staging`/`prod` behind GitHub Environment protection rules. It assumes the
   per-environment OIDC role created by `infra/terraform/bootstrap/` (trust is scoped to
@@ -12,10 +65,10 @@ Runbooks for deploying and operating the API.
   version (expand/contract: add columns/tables first, switch code, drop later). Migrations are skipped
   with a warning when `MIGRATION_DATABASE_URL` is not set — the DB is private, so supply it via an
   in-VPC path (bastion/tunnel/self-hosted runner).
-- **Required secrets/vars** (per GitHub Environment): `AWS_DEPLOY_ROLE_ARN`, `TF_STATE_BUCKET`,
-  `TF_STATE_KMS_KEY_ARN` (all from `terraform output` in `bootstrap/`), optionally
-  `MIGRATION_DATABASE_URL`. Locally: `export TF_STATE_BUCKET=… TF_STATE_KMS_KEY_ARN=…` before
-  `task tf:plan ENV=dev`.
+- **Required secrets/vars** (per GitHub Environment): just `AWS_DEPLOY_ROLE_ARN` (the env's entry in
+  the `deploy_role_arns` output from the bootstrap step above), optionally `MIGRATION_DATABASE_URL` and
+  an `AWS_REGION` var. The state backend names are derived, so there are no `TF_STATE_*` secrets.
+  Locally, no exports are needed — `task tf:plan ENV=dev` with AWS credentials resolves everything.
 - **Prod guardrails**: the stack refuses to plan `prod` without `alarm_email`, an explicit
   `cors_origin`, https callback/logout URLs, `db_multi_az = true`, `deletion_protection = true` and no
   password-auth test client (`infra/terraform/stack/variables.tf`).

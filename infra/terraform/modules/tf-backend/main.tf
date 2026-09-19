@@ -39,6 +39,13 @@ resource "aws_kms_key" "state" {
   }
 }
 
+# A stable alias so the S3 backend's kms_key_id is derivable from the service +
+# env (alias/<service>-tfstate-<env>) instead of the account-specific key id.
+resource "aws_kms_alias" "state" {
+  name          = "alias/${var.kms_alias}"
+  target_key_id = aws_kms_key.state.key_id
+}
+
 resource "aws_s3_bucket" "state" {
   bucket = var.state_bucket
   tags   = var.tags
