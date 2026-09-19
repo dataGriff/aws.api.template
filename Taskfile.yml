@@ -262,38 +262,40 @@ tasks:
       - mkdir -p test-results
       - checkov -d {{.TF_DIR}} --config-file .checkov.yaml -o cli -o github_failed_only --output-file-path console,test-results/checkov-failed.md
   tf:bootstrap:
-    desc: "One-time: create the TF state backend + GitHub OIDC deploy roles. STATE_BUCKET=<globally-unique> GITHUB_REPOSITORY=<owner/repo>. Needs local admin AWS creds. See docs/operations."
+    desc: "One-time: create per-env TF state backends (bucket+lock+KMS) + GitHub OIDC deploy roles. SERVICE_NAME defaults to todo-api; GITHUB_REPOSITORY=<owner/repo> required. Needs local admin AWS creds. See docs/operations."
     dir: "{{.TF_DIR}}/bootstrap"
     preconditions:
-      - sh: test -n "$STATE_BUCKET"
-        msg: "Set STATE_BUCKET=<globally-unique S3 bucket name for TF state>."
       - sh: test -n "$GITHUB_REPOSITORY"
         msg: "Set GITHUB_REPOSITORY=<owner/repo> so the OIDC trust is scoped to your repo (default is the template's own repo)."
     cmds:
-      # Local backend — this run CREATES the remote backend the envs then use.
+      # Local backend — this run CREATES the per-env remote backends the envs use.
       - terraform init -input=false
-      - terraform apply -input=false -var=state_bucket="$STATE_BUCKET" -var=github_repository="$GITHUB_REPOSITORY"
-      # Prints state_bucket / state_kms_key_arn / deploy_role_arns to wire into
-      # the GitHub Environments (see docs/operations).
+      - terraform apply -input=false -var=service_name="${SERVICE_NAME:-todo-api}" -var=github_repository="$GITHUB_REPOSITORY"
+      # Prints the derived bucket/lock/alias names + deploy_role_arns. Only
+      # AWS_DEPLOY_ROLE_ARN (per env) needs setting as a GitHub secret.
       - terraform output
 
   tf:plan:
-    desc: "Terraform plan for an env, e.g. task tf:plan ENV=dev (needs TF_STATE_BUCKET)"
+    desc: "Terraform plan for an env, e.g. task tf:plan ENV=dev (backend names derived from service_name+env+account; needs AWS creds)"
     dir: "{{.TF_DIR}}/envs/{{.ENV}}"
-    preconditions:
-      - sh: test -n "$TF_STATE_BUCKET" || test -n "$TF_CLI_ARGS_init"
-        msg: "Set TF_STATE_BUCKET=<state bucket> and TF_STATE_KMS_KEY_ARN=<key arn> from `terraform output` in bootstrap/ (see docs/operations)."
     cmds:
-      # Backend bucket/region come from the environment (CI sets TF_CLI_ARGS_init;
-      # locally export TF_STATE_BUCKET) so no account-specific value is committed.
-      - terraform init -input=false ${TF_STATE_BUCKET:+-backend-config=bucket=$TF_STATE_BUCKET -backend-config=region=${AWS_REGION:-eu-west-2}} ${TF_STATE_KMS_KEY_ARN:+-backend-config=kms_key_id=$TF_STATE_KMS_KEY_ARN}
+      # Backend names are derived from the env's service_name (read from
+      # terraform.tfvars, or SERVICE_NAME override) + env + account id, so nothing
+      # account-specific is committed and there are no state secrets to set.
+      - |
+        set -euo pipefail
+        svc="${SERVICE_NAME:-$(sed -nE 's/^service_name[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' terraform.tfvars)}"
+        account="$(aws sts get-caller-identity --query Account --output text)"
+        region="${AWS_REGION:-eu-west-2}"
+        terraform init -input=false -reconfigure \
+          -backend-config=bucket="${svc}-tfstate-{{.ENV}}-${account}" \
+          -backend-config=region="${region}" \
+          -backend-config=dynamodb_table="${svc}-tflock-{{.ENV}}" \
+          -backend-config=kms_key_id="alias/${svc}-tfstate-{{.ENV}}"
       - terraform plan -input=false -var-file=terraform.tfvars -out=tfplan
   tf:apply:
     desc: "Terraform apply for an env (used by CI deploy). Applies the saved plan from tf:plan."
     dir: "{{.TF_DIR}}/envs/{{.ENV}}"
-    preconditions:
-      - sh: test -n "$TF_STATE_BUCKET" || test -n "$TF_CLI_ARGS_init"
-        msg: "Set TF_STATE_BUCKET=<state bucket> and TF_STATE_KMS_KEY_ARN=<key arn> from `terraform output` in bootstrap/ (see docs/operations)."
     cmds:
       - task: tf:plan
         vars: { ENV: "{{.ENV}}" }
