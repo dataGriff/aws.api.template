@@ -1,0 +1,20 @@
+# imports requests — generated from api/openapi.yaml by task gen. Do not edit.
+# Select an environment (local/dev/staging/prod) from http-client.env.json; tokens come
+# from the git-ignored http-client.private.env.json written by `task token`.
+
+### create_import — Start a CSV import (returns a one-time upload target)
+# @name create_import
+POST {{baseUrl}}/imports
+Authorization: Bearer {{token}}
+x-api-key: {{apiKey}}
+Content-Type: application/json
+
+{
+  "file_name": "todos.csv"
+}
+
+### get_import — Get an import's status and validation report
+# @name get_import
+GET {{baseUrl}}/imports/{{import_id}}
+Authorization: Bearer {{token}}
+x-api-key: {{apiKey}}

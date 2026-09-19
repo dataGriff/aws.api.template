@@ -24,12 +24,13 @@ tasks:
   # Aggregate gates
   # ---------------------------------------------------------------------------
   check:
-    desc: "Fast pre-commit gate: format, lint, typecheck, spec lint, contract compat, gen-drift, secrets, unit"
+    desc: "Fast pre-commit gate: format, lint, typecheck, spec lint, data-contract lint+test, contract compat, gen-drift, secrets, unit"
     cmds:
       - task: format:check
       - task: lint
       - task: typecheck
       - task: spec:lint
+      - task: contract:odcs
       - task: contract:compat
       - task: gen:check
       - task: security:secrets
@@ -82,10 +83,23 @@ tasks:
     desc: "Fail on BREAKING contract changes vs the base branch (oasdiff); CONTRACT_BASE_REF overrides the base"
     cmds:
       - ./scripts/contract-compat.sh
+  contract:odcs:
+    desc: "Lint the ODCS data contract(s) and test the example files against them (datacontract-cli, no Docker)"
+    cmds:
+      - for f in api/*.odcs.yaml; do datacontract lint "$f"; done
+      # The valid example must pass every schema/quality check…
+      - datacontract test api/todo-import.odcs.yaml --server example
+      # …and the invalid one must FAIL, or the contract has stopped rejecting what it should.
+      - |
+        if datacontract test api/todo-import.odcs.yaml --server example_invalid >/dev/null 2>&1; then
+          echo "api/examples/todo-import.invalid.csv passed the data contract — the contract no longer rejects invalid files"
+          exit 1
+        fi
   gen:
-    desc: "Regenerate everything from the contract (contracts, SDK, mock cfg, docs, .http)"
+    desc: "Regenerate everything from the contracts (zod/types + ODCS row validator, SDK, docs, .http, gateway spec)"
     cmds:
       - task: spec:lint
+      # kubb (OpenAPI -> zod/types) then scripts/gen-odcs.mjs (ODCS -> row validator)
       - pnpm --filter @app/contracts gen
       - pnpm --filter @app/sdk gen
       - task: gen:httpfiles
@@ -142,7 +156,7 @@ tasks:
     cmds:
       - pnpm --filter @app/api test:bdd
   test:contract:
-    desc: "Contract tests over real HTTP against local/server.ts + throwaway Postgres (Docker): Schemathesis provider conformance, generated-SDK consumer conformance, .http collection replay"
+    desc: "Contract tests over real HTTP against local/server.ts + throwaway Postgres and moto (Docker): Schemathesis provider conformance, generated-SDK consumer conformance incl. a real CSV import, .http collection replay"
     cmds:
       # Inside the workspace @app/sdk resolves to its source (publishConfig
       # switches to dist on publish), so build the package and load BOTH
@@ -162,10 +176,12 @@ tasks:
   # Local dev
   # ---------------------------------------------------------------------------
   up:
-    desc: Start the local stack (Postgres, cognito-local, Prism mock, API)
+    desc: Start the local stack (Postgres, cognito-local, Prism mock, moto for S3/SQS/KMS) and provision it
     cmds:
       - docker compose -f local/docker-compose.yml up -d --wait
       - task: db:migrate
+      # Bucket, queue, key and bucket notification for the CSV import (idempotent).
+      - node local/aws-local-init.mjs
   down:
     desc: Stop the local stack
     cmds:
@@ -178,6 +194,17 @@ tasks:
     desc: "Mint an unsigned local stub JWT into the git-ignored .http private env (local only)"
     cmds:
       - node scripts/mint-token.mjs {{.CLI_ARGS}}
+  import:worker:
+    desc: "Run the CSV import ingest locally, fed from the moto queue (stands in for the SQS -> Lambda mapping)"
+    cmds:
+      - pnpm --filter @app/api import:worker
+  import:file:
+    desc: "Import a CSV through the running local API end to end, e.g. task import:file FILE=api/examples/todo-import.valid.csv"
+    preconditions:
+      - sh: test -n "{{.FILE}}"
+        msg: "Pass FILE=<path to a .csv> (needs `task serve` and `task import:worker` running)."
+    cmds:
+      - node scripts/import-file.mjs {{.FILE}}
 
   # ---------------------------------------------------------------------------
   # Database

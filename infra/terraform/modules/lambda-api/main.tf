@@ -64,8 +64,16 @@ data "aws_iam_policy_document" "app" {
     actions   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem"]
     resources = [var.idempotency_table_arn]
   }
-  # Decrypt the CMK-encrypted secret / DynamoDB table (data key) and the
-  # function's own environment variables (ops key).
+  # A pre-signed POST acts with the signer's permissions: the API may only
+  # create objects under uploads/ (never read them — the ingest does that).
+  statement {
+    sid       = "PresignImportUploads"
+    actions   = ["s3:PutObject"]
+    resources = ["${var.import_bucket_arn}/uploads/*"]
+  }
+  # Decrypt the CMK-encrypted secret / DynamoDB table (data key), let the
+  # pre-signed upload encrypt with it, and the function's own environment
+  # variables (ops key).
   statement {
     sid       = "Kms"
     actions   = ["kms:Decrypt", "kms:GenerateDataKey", "kms:DescribeKey"]
@@ -131,6 +139,8 @@ resource "aws_lambda_function" "api" {
       DB_IAM_AUTH                  = var.rds_iam_auth ? "true" : "false"
       DB_SECRET_ARN                = var.secret_arn
       IDEMPOTENCY_TABLE            = var.idempotency_table_name
+      IMPORT_BUCKET                = var.import_bucket_name
+      IMPORT_KMS_KEY_ARN           = var.data_kms_key_arn
     }, var.extra_environment)
   }
 

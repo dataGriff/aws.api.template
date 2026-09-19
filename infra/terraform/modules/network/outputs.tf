@@ -10,4 +10,8 @@ output "dynamodb_prefix_list_id" {
   value       = aws_vpc_endpoint.dynamodb.prefix_list_id
   description = "Managed prefix list of the DynamoDB gateway endpoint (for egress rules)"
 }
+output "s3_prefix_list_id" {
+  value       = aws_vpc_endpoint.s3.prefix_list_id
+  description = "Managed prefix list of the S3 gateway endpoint (for egress rules)"
+}
 output "nat_enabled" { value = local.enable_nat }

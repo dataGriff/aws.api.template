@@ -105,3 +105,35 @@ export async function query<T>(text: string, params: readonly unknown[] = []): P
   const result = await p.query(text, params as unknown[]);
   return result.rows as T[];
 }
+
+// The one thing a repository needs from the database: run a parameterised
+// query. The pool implements it (auto-commit) and so does a transaction below,
+// so the same repository code serves single requests and atomic batches.
+export interface Queryable {
+  query<T>(text: string, params?: readonly unknown[]): Promise<T[]>;
+}
+
+export const db: Queryable = { query };
+
+// Runs `fn` inside one transaction on a dedicated client: everything commits
+// together or nothing does. Callers pass the transaction to the repository
+// functions they want inside it. The client is released even on failure and
+// holds no session state afterwards (nothing for RDS Proxy to pin on).
+export async function withTransaction<T>(fn: (tx: Queryable) => Promise<T>): Promise<T> {
+  const client = await (await getPool()).connect();
+  const tx: Queryable = {
+    query: async <R>(text: string, params: readonly unknown[] = []) =>
+      (await client.query(text, params as unknown[])).rows as R[],
+  };
+  try {
+    await client.query("BEGIN");
+    const result = await fn(tx);
+    await client.query("COMMIT");
+    return result;
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw err;
+  } finally {
+    client.release();
+  }
+}

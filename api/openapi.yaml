@@ -24,6 +24,10 @@ servers:
 tags:
   - name: todos
     description: Create and manage todos
+  - name: imports
+    description: |
+      Bulk-create todos by uploading a CSV file. The file format is a separate, machine-readable
+      data contract (Open Data Contract Standard 3.2): `api/todo-import.odcs.yaml`.
   - name: health
     description: Service health
 
@@ -169,6 +173,71 @@ paths:
         "429": { $ref: "#/components/responses/too_many_requests" }
         "500": { $ref: "#/components/responses/internal_error" }
 
+  /imports:
+    post:
+      operationId: create_import
+      summary: Start a CSV import (returns a one-time upload target)
+      description: |
+        Registers an import for the caller and returns a short-lived, pre-signed S3 `POST` target.
+        Upload the CSV file described by the ODCS data contract `api/todo-import.odcs.yaml` as
+        `multipart/form-data`: every entry of `upload.fields` verbatim, then the file as the LAST
+        part, named `file`. The object key, size limit, content type and encryption are fixed by the
+        signed policy; the caller cannot change them.
+
+        Processing is asynchronous and atomic: the whole file is validated against the data contract
+        and either every row becomes a todo of the caller, or nothing is written, the file is moved to
+        quarantine, an alert is raised and `get_import` reports `rejected` with the first errors.
+      tags: [imports]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/todo_import_create"
+      responses:
+        "201":
+          description: Import registered; `upload` says where to send the file
+          headers:
+            location:
+              description: URL of the import
+              schema: { type: string, format: uri-reference }
+            x-request-id:
+              $ref: "#/components/headers/x_request_id"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/todo_import"
+          links:
+            get_import: { $ref: "#/components/links/get_import" }
+        "400": { $ref: "#/components/responses/bad_request" }
+        "401": { $ref: "#/components/responses/unauthorized" }
+        "403": { $ref: "#/components/responses/forbidden" }
+        "413": { $ref: "#/components/responses/payload_too_large" }
+        "422": { $ref: "#/components/responses/unprocessable_entity" }
+        "429": { $ref: "#/components/responses/too_many_requests" }
+        "500": { $ref: "#/components/responses/internal_error" }
+
+  /imports/{import_id}:
+    parameters:
+      - $ref: "#/components/parameters/import_id"
+    get:
+      operationId: get_import
+      summary: Get an import's status and validation report
+      tags: [imports]
+      responses:
+        "200":
+          description: The import
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/todo_import"
+        "400": { $ref: "#/components/responses/bad_request" }
+        "401": { $ref: "#/components/responses/unauthorized" }
+        "403": { $ref: "#/components/responses/forbidden" }
+        "404": { $ref: "#/components/responses/not_found" }
+        "429": { $ref: "#/components/responses/too_many_requests" }
+        "500": { $ref: "#/components/responses/internal_error" }
+
 components:
   securitySchemes:
     cognito_jwt:
@@ -188,6 +257,14 @@ components:
       in: path
       required: true
       description: Unique todo identifier
+      schema:
+        type: string
+        format: uuid
+    import_id:
+      name: import_id
+      in: path
+      required: true
+      description: Unique import identifier
       schema:
         type: string
         format: uuid
@@ -241,6 +318,10 @@ components:
       operationId: delete_todo
       parameters:
         todo_id: $response.body#/todo_id
+    get_import:
+      operationId: get_import
+      parameters:
+        import_id: $response.body#/import_id
 
   headers:
     x_request_id:
@@ -348,6 +429,106 @@ components:
           type: string
           nullable: true
           description: Pass as `cursor` to fetch the next page; null when no more pages
+
+    todo_import_create:
+      type: object
+      required: [file_name]
+      additionalProperties: false
+      properties:
+        file_name:
+          type: string
+          description: |
+            Name of the CSV file as the caller knows it, echoed in the status for humans. It never
+            influences where or how the object is stored (the server chooses the key).
+          minLength: 5
+          maxLength: 255
+          pattern: '^[A-Za-z0-9][A-Za-z0-9 ._-]*\.csv$'
+          example: todos.csv
+
+    todo_import_status:
+      type: string
+      description: |
+        `awaiting_upload` until the file arrives, `processing` while it is validated, then
+        `completed` (every row created) or `rejected` (nothing created, file quarantined).
+      enum: [awaiting_upload, processing, completed, rejected]
+
+    todo_import_error:
+      type: object
+      description: One contract violation. `row` is the 1-based data row (0 = the file itself).
+      required: [row, field, message]
+      additionalProperties: false
+      properties:
+        row:
+          type: integer
+          minimum: 0
+        field:
+          type: string
+        message:
+          type: string
+
+    todo_import_upload:
+      type: object
+      description: |
+        Pre-signed S3 `POST` target. Send `multipart/form-data` to `url` with every entry of `fields`
+        as a form field (verbatim, order preserved), then the CSV as the last part named `file`.
+        Files larger than `max_bytes` or with another content type are refused by S3 itself.
+      required: [url, fields, expires_at, max_bytes]
+      additionalProperties: false
+      properties:
+        url:
+          type: string
+          format: uri
+        fields:
+          type: object
+          additionalProperties:
+            type: string
+        expires_at:
+          type: string
+          format: date-time
+        max_bytes:
+          type: integer
+          minimum: 1
+
+    todo_import:
+      type: object
+      required: [import_id, status, file_name, created_at, updated_at]
+      additionalProperties: false
+      properties:
+        import_id:
+          type: string
+          format: uuid
+        status:
+          $ref: "#/components/schemas/todo_import_status"
+        file_name:
+          type: string
+        upload:
+          $ref: "#/components/schemas/todo_import_upload"
+        row_count:
+          type: integer
+          minimum: 0
+          nullable: true
+          description: Data rows found in the file (null until processed)
+        created_count:
+          type: integer
+          minimum: 0
+          nullable: true
+          description: Todos created (equals row_count when completed, 0 when rejected)
+        errors:
+          type: array
+          maxItems: 100
+          description: First contract violations when rejected (the full report is quarantined with the file)
+          items:
+            $ref: "#/components/schemas/todo_import_error"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
 
     problem:
       type: object

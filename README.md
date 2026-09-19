@@ -20,7 +20,7 @@ mise install
 # 2. Install dependencies (also installs the git hooks via `prepare`)
 pnpm install
 
-# 3. Bring up the local stack (Postgres + cognito-local + Prism mock) and migrate
+# 3. Bring up the local stack (Postgres + cognito-local + Prism mock + moto) and migrate
 task up
 
 # 4. Run the API locally and mint a token
@@ -34,15 +34,16 @@ task ci
 
 ## What you get
 
-| Area               | Highlights                                                                                                                                                                                          |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Contract-first** | `api/openapi.yaml` → generated zod+types, consumer SDK, Prism mock, `.http` collection, Redocly API reference. Drift is CI-gated.                                                                   |
-| **Secure auth**    | Cognito user pool + app clients, **pre-token-generation trigger** adds custom claims, gateway Cognito authorizer, API keys + usage plans, WAF (opt-in).                                             |
-| **Data**           | Postgres via RDS Proxy (IAM auth, pooled), parameterisable Aurora Serverless v2 ↔ RDS. Forward-only migrations run out-of-band.                                                                     |
-| **Infra**          | Terraform modules + `dev/staging/prod` envs, GitHub OIDC deploy roles (no long-lived keys), S3+DynamoDB state, prod guardrails. Opt-in flags: WAF, RDS Proxy, egress/ingress static IP, custom DNS. |
-| **Testing**        | vitest unit + integration (testcontainers), cucumber-js BDD, contract tests over real HTTP (Schemathesis provider + generated-SDK consumer + oasdiff compat gate), Schemathesis fuzz.               |
-| **DX**             | mise + Taskfile, lefthook hooks (`task check` / `task ci`), one CI that runs identically locally.                                                                                                   |
-| **Ops**            | CloudWatch dashboard + alarms, X-Ray tracing, structured logs, SBOM, Infracost, semantic-release.                                                                                                   |
+| Area               | Highlights                                                                                                                                                                                                                                                         |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Contract-first** | `api/openapi.yaml` → generated zod+types, consumer SDK, Prism mock, `.http` collection, Redocly API reference. `api/todo-import.odcs.yaml` (ODCS 3.2) → the CSV row validator. Drift is CI-gated.                                                                  |
+| **File import**    | `POST /imports` mints a pre-signed S3 POST (key, type, size, KMS pinned); S3 → SQS → ingest Lambda validates the whole file against the data contract, creates all rows in one transaction or quarantines the file, alerts. moto locally.                          |
+| **Secure auth**    | Cognito user pool + app clients, **pre-token-generation trigger** adds custom claims, gateway Cognito authorizer, API keys + usage plans, WAF (opt-in).                                                                                                            |
+| **Data**           | Postgres via RDS Proxy (IAM auth, pooled), parameterisable Aurora Serverless v2 ↔ RDS. Forward-only migrations run out-of-band.                                                                                                                                    |
+| **Infra**          | Terraform modules + `dev/staging/prod` envs, GitHub OIDC deploy roles (no long-lived keys), S3+DynamoDB state, prod guardrails. Opt-in flags: WAF, RDS Proxy, egress/ingress static IP, custom DNS.                                                                |
+| **Testing**        | vitest unit + integration (testcontainers: Postgres, DynamoDB Local, moto), cucumber-js BDD, contract tests over real HTTP (Schemathesis provider + generated-SDK consumer + oasdiff compat gate), datacontract-cli for the ODCS file contract, Schemathesis fuzz. |
+| **DX**             | mise + Taskfile, lefthook hooks (`task check` / `task ci`), one CI that runs identically locally.                                                                                                                                                                  |
+| **Ops**            | CloudWatch dashboard + alarms, X-Ray tracing, structured logs, SBOM, Infracost, semantic-release.                                                                                                                                                                  |
 
 ## Documentation
 

@@ -39,6 +39,8 @@ all wired to that topic:
 | `api-5xx`               | `AWS/ApiGateway 5XXError`                           | > 5 in 5 min     | Server-side failures                         |
 | `api-latency-p99`       | `AWS/ApiGateway Latency` p99                        | > 2000 ms        | Latency regressions                          |
 | `db-connection-pinning` | `AWS/RDS DatabaseConnectionsCurrentlySessionPinned` | > 5 (proxy only) | RDS Proxy pinning silently disabling pooling |
+| `import-rejected`       | `<service>-<env> import_rejected` (ingest metric)   | ≥ 1 in 1 min     | A CSV import violated the data contract      |
+| `import-dead-letter`    | `AWS/SQS ApproximateNumberOfMessagesVisible` (DLQ)  | ≥ 1              | The ingest itself failed after 3 attempts    |
 
 **Get notified:** set `alarm_email` (per env in `terraform.tfvars`; **required in prod**) to subscribe
 an address to the topic — confirm the subscription email once. For Slack/PagerDuty, subscribe their
@@ -46,3 +48,19 @@ endpoint to the same topic instead. Thresholds are tunable via the module variab
 (`error_threshold`, `latency_p99_ms`, `pinning_threshold`).
 
 Alarm actions and the dashboard are visible in the CloudWatch console under the `<service>-<env>` name.
+
+## CSV imports: quarantine and dead letters
+
+- **`import-rejected` fired.** A file did not meet `api/todo-import.odcs.yaml`. Nothing was created.
+  The object was moved to `s3://<import_bucket>/quarantine/<tenant>/<import_id>.csv` with the full
+  report next to it (`….csv.report.json`: every violation with row and field); the import's API
+  status is `rejected` with the first 100 errors, so the uploader can fix and re-upload through a new
+  `POST /imports`. Quarantine expires after `import_quarantine_retention_days` (90). If the report
+  shows `import_id: null`, the object did **not** come through the API (a direct write to
+  `uploads/`): treat as a security event and check who has `s3:PutObject` on the bucket.
+- **`import-dead-letter` fired.** The ingest crashed repeatedly (database or S3 unreachable, a bug).
+  The file is still under `uploads/` and the import shows `processing`. Fix the cause, then redrive
+  the DLQ (`<service>-<env>-import-dlq`) to the source queue from the SQS console or
+  `aws sqs start-message-move-task`; processing is idempotent, a duplicate delivery never
+  double-creates. Unprocessed uploads expire after `upload_retention_days` (7).
+- **Outputs**: `import_bucket`, `import_dead_letter_queue` (`terraform output`).

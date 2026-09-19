@@ -10,13 +10,16 @@ import { schemas } from "@app/contracts";
 import {
   ApiError,
   createClient,
+  createImport,
   createTodo,
   deleteTodo,
   getHealth,
+  getImport,
   getTodo,
   listTodos,
   updateTodo,
 } from "@app/sdk";
+import { uploadWithPresignedPost } from "../helpers/aws.js";
 
 const parse = <T>(
   schema: { safeParse: (v: unknown) => { success: boolean; error?: unknown; data?: unknown } },
@@ -28,7 +31,13 @@ const parse = <T>(
   return r.data as T;
 };
 
-export async function runSdkConsumer(baseUrl: string, token: string): Promise<void> {
+// `processImports` runs the ingest on whatever S3 has notified so far (the
+// deployed Lambda mapping does this by itself; here the test drives it).
+export async function runSdkConsumer(
+  baseUrl: string,
+  token: string,
+  processImports: () => Promise<void>,
+): Promise<void> {
   const { client } = createClient({ baseURL: baseUrl, token, apiKey: "local-dev-key" });
   const steps: string[] = [];
   const step = (s: string) => {
@@ -114,6 +123,72 @@ export async function runSdkConsumer(baseUrl: string, token: string): Promise<vo
     return true;
   });
   step("createTodo with empty title → ApiError 400 naming the field");
+
+  // CSV import: the SDK registers the import, a plain multipart POST uploads
+  // the file to S3 with the signed fields, the ingest runs, and the SDK reads
+  // the outcome — the whole file-interface contract from a consumer's seat.
+  const started = parse<{
+    import_id: string;
+    status: string;
+    upload: { url: string; fields: Record<string, string>; max_bytes: number };
+  }>(
+    schemas.todoImportSchema,
+    await createImport({ file_name: "sdk.csv" }, { client }),
+    "createImport",
+  );
+  assert.equal(started.status, "awaiting_upload");
+  assert.ok(
+    started.upload.fields.key?.endsWith(`${started.import_id}.csv`),
+    "signed key is the import's",
+  );
+  step(
+    `createImport → ${started.import_id} (upload target expires, max ${started.upload.max_bytes} bytes)`,
+  );
+
+  const uploaded = await uploadWithPresignedPost(
+    started.upload,
+    "title,description,status,due_date\nFrom the SDK,,open,2030-03-01\nSecond,,done,\n",
+  );
+  assert.ok(uploaded.status < 300, `upload rejected: ${uploaded.status} ${await uploaded.text()}`);
+  step("multipart POST to the pre-signed target → accepted by S3");
+
+  await processImports();
+  const finished = parse<{
+    status: string;
+    row_count: number | null;
+    created_count: number | null;
+  }>(schemas.todoImportSchema, await getImport(started.import_id, { client }), "getImport");
+  assert.equal(finished.status, "completed");
+  assert.equal(finished.row_count, 2);
+  assert.equal(finished.created_count, 2);
+  step("getImport → completed, 2 rows created");
+
+  const imported = parse<{ items: { title: string }[] }>(
+    schemas.todoPageSchema,
+    await listTodos({ limit: 100 }, { client }),
+    "listTodos after import",
+  );
+  assert.ok(
+    imported.items.some((t) => t.title === "From the SDK"),
+    "imported todo is listed",
+  );
+  step("listTodos → imported todos visible to the same caller");
+
+  await assert.rejects(createImport({ file_name: "notes.txt" }, { client }), (err: unknown) => {
+    assert.ok(err instanceof ApiError);
+    assert.equal(err.status, 400);
+    const errors = (err.problem as { errors?: { field: string }[] } | undefined)?.errors ?? [];
+    assert.equal(errors[0]?.field, "file_name");
+    return true;
+  });
+  step("createImport with a non-.csv name → ApiError 400 naming the field");
+
+  await assert.rejects(getImport(randomUUID(), { client }), (err: unknown) => {
+    assert.ok(err instanceof ApiError);
+    assert.equal(err.status, 404);
+    return true;
+  });
+  step("getImport unknown id → ApiError 404");
 
   console.log(`▶ SDK consumer conformance: ${steps.length} steps passed`);
 }

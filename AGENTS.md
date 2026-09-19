@@ -12,6 +12,9 @@ app. See `docs/architecture/` for the full picture.
 
 - **The contract is the source of truth.** `api/openapi.yaml` drives generated code, gateway
   validation, the SDK, mocks, docs and `.http` files. Change the contract first, then run `task gen`.
+- **Files have a contract too.** `api/todo-import.odcs.yaml` (ODCS 3.2) defines the CSV import;
+  `task gen` renders it into the row validator and a unit test keeps it identical to `todo_create`.
+  Rows are created through the same domain code as the API — never a second implementation.
 - **Never edit generated code by hand.** Anything under `**/generated/`, `collections/`,
   `docs/api-reference/` is produced by `task gen` and gated in CI (`task gen:check`).
 - **Everything runs through the Taskfile.** Don't invent ad-hoc scripts — add/extend a `task`. Git
@@ -22,16 +25,18 @@ app. See `docs/architecture/` for the full picture.
 
 ## Common commands
 
-| Command                 | Purpose                                                       |
-| ----------------------- | ------------------------------------------------------------- |
-| `mise install`          | Install all pinned tools                                      |
-| `task up` / `task down` | Start / stop the local stack (Postgres, cognito-local, Prism) |
-| `task gen`              | Regenerate everything from the contract                       |
-| `task check`            | Fast gate (pre-commit)                                        |
-| `task ci`               | Full gate — identical locally and in CI                       |
-| `task test:fuzz`        | Schemathesis property fuzzing                                 |
-| `task db:console`       | Interactive SQL (Harlequin)                                   |
-| `task deploy ENV=dev`   | Deploy an environment                                         |
+| Command                  | Purpose                                                       |
+| ------------------------ | ------------------------------------------------------------- |
+| `mise install`           | Install all pinned tools                                      |
+| `task up` / `task down`  | Start / stop the local stack (Postgres, cognito-local, Prism) |
+| `task gen`               | Regenerate everything from the contract                       |
+| `task check`             | Fast gate (pre-commit)                                        |
+| `task ci`                | Full gate — identical locally and in CI                       |
+| `task test:fuzz`         | Schemathesis property fuzzing                                 |
+| `task import:worker`     | Run the CSV ingest locally (moto queue → real handler)        |
+| `task import:file FILE=` | Import a CSV through the local API end to end                 |
+| `task db:console`        | Interactive SQL (Harlequin)                                   |
+| `task deploy ENV=dev`    | Deploy an environment                                         |
 
 ## Where to look
 

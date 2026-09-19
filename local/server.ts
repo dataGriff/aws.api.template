@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage } from "node:http";
+import { applyLocalAwsDefaults } from "./local-env.mjs";
 
 // Local HTTP server that runs the real Lambda handler. It emulates the two
 // things API Gateway does in front of Lambda: routing to a resource template,
@@ -13,6 +14,8 @@ if (process.env.APP_ENV !== "local") {
 }
 process.env.DATABASE_URL ??= "postgresql://app:app@localhost:5432/app";
 process.env.POWERTOOLS_SERVICE_NAME ??= "todo-api-local";
+// S3/KMS for POST /imports come from moto (local/docker-compose.yml).
+applyLocalAwsDefaults();
 
 const { handler } = await import("../packages/api/src/handler.ts");
 
@@ -26,6 +29,8 @@ const ROUTES: { re: RegExp; resource: string; params: string[] }[] = [
   { re: /^\/health$/, resource: "/health", params: [] },
   { re: /^\/todos$/, resource: "/todos", params: [] },
   { re: /^\/todos\/([^/]+)$/, resource: "/todos/{todo_id}", params: ["todo_id"] },
+  { re: /^\/imports$/, resource: "/imports", params: [] },
+  { re: /^\/imports\/([^/]+)$/, resource: "/imports/{import_id}", params: ["import_id"] },
 ];
 
 function matchRoute(path: string) {

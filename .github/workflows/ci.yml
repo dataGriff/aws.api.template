@@ -35,15 +35,15 @@ jobs:
       # The gates below are exactly the sub-tasks of `task ci` (what the pre-push
       # hook runs), one step each so the Actions UI shows which gate failed and
       # its log is collapsible on its own. Every gate fails on findings.
-      - name: "check: format, lint, typecheck, spec lint, contract compat, gen drift, secrets, unit"
+      - name: "check: format, lint, typecheck, spec lint, data contract (ODCS) lint+test, contract compat, gen drift, secrets, unit"
         run: task check
       - name: "build: Lambda bundles + SDK"
         run: task build
-      - name: "test: integration (real Postgres via testcontainers)"
+      - name: "test: integration (real Postgres + moto S3/SQS via testcontainers)"
         run: task test:integration
       - name: "test: BDD acceptance scenarios"
         run: task test:bdd
-      - name: "test: contract over HTTP (Schemathesis provider + SDK consumer + .http collection)"
+      - name: "test: contract over HTTP (Schemathesis provider + SDK consumer incl. CSV import + .http collection)"
         run: task test:contract
       - name: "terraform: fmt, validate (all envs), tflint, terraform test (guardrails)"
         run: task tf:validate

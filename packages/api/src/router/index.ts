@@ -1,8 +1,9 @@
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { z } from "zod";
 import { schemas } from "@app/contracts";
-import type { TodoCreate, TodoStatus, TodoUpdate } from "@app/contracts";
+import type { TodoCreate, TodoImportCreate, TodoStatus, TodoUpdate } from "@app/contracts";
 import { extractAuth } from "../auth/claims.js";
+import * as imports from "../domain/imports.js";
 import * as todos from "../domain/todos.js";
 import { createTodoIdempotent } from "../idempotency.js";
 import { json, noContent, parseBody, validate } from "../http.js";
@@ -65,21 +66,26 @@ const createTodo: Handler = async (event) => {
 };
 
 const uuid = z.string().uuid();
-const pathId = (event: APIGatewayProxyEvent): string => {
-  const id = event.pathParameters?.todo_id;
-  if (!id) throw new NotFoundError("Missing todo id");
-  return validate<string>(uuid, id, "todo_id");
+const pathParam = (event: APIGatewayProxyEvent, name: "todo_id" | "import_id"): string => {
+  // `name` is a literal union, not user input — safe indexed access.
+  // eslint-disable-next-line security/detect-object-injection
+  const id = event.pathParameters?.[name];
+  if (!id) throw new NotFoundError(`Missing ${name}`);
+  return validate<string>(uuid, id, name);
 };
+const pathId = (event: APIGatewayProxyEvent): string => pathParam(event, "todo_id");
 
 const getTodo: Handler = async (event) =>
   json(200, await todos.getTodo(extractAuth(event), pathId(event)));
 
 // The generated zod schema cannot express the contract's `minProperties: 1`,
-// so the "at least one field" rule is applied here.
-const todoUpdateSchema = schemas.todoUpdateSchema.refine(
-  (patch) => Object.values(patch as Record<string, unknown>).some((v) => v !== undefined),
-  { message: "At least one field must be provided" },
-);
+// so the "at least one field" rule is applied here (strict first: the refine
+// wrapper hides the object from validate()'s own strictness).
+const todoUpdateSchema = (schemas.todoUpdateSchema as unknown as z.AnyZodObject)
+  .strict()
+  .refine((patch) => Object.values(patch as Record<string, unknown>).some((v) => v !== undefined), {
+    message: "At least one field must be provided",
+  });
 
 const updateTodo: Handler = async (event) => {
   const auth = extractAuth(event);
@@ -92,6 +98,18 @@ const deleteTodo: Handler = async (event) => {
   return noContent();
 };
 
+// CSV import: register + one-time pre-signed upload target, then poll status.
+// The file itself never passes through the API (see domain/imports.ts).
+const createImport: Handler = async (event) => {
+  const auth = extractAuth(event);
+  const input = parseBody<TodoImportCreate>(event, schemas.todoImportCreateSchema);
+  const created = await imports.createImport(auth, input);
+  return json(201, created, { location: locationFor(event, created.import_id) });
+};
+
+const getImport: Handler = async (event) =>
+  json(200, await imports.getImport(extractAuth(event), pathParam(event, "import_id")));
+
 // Keyed by "<METHOD> <resource>" where resource is the API Gateway path
 // template. Must match the operations in api/openapi.yaml exactly — a unit
 // test (test/unit/routes-contract.test.ts) fails the build on drift.
@@ -102,6 +120,8 @@ export const routes: Readonly<Record<string, Handler>> = {
   "GET /todos/{todo_id}": getTodo,
   "PATCH /todos/{todo_id}": updateTodo,
   "DELETE /todos/{todo_id}": deleteTodo,
+  "POST /imports": createImport,
+  "GET /imports/{import_id}": getImport,
 };
 
 export async function dispatch(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {

@@ -1,0 +1,1 @@
+{"type":"object","description":"One contract violation. `row` is the 1-based data row (0 = the file itself).","required":["row","field","message"],"additionalProperties":false,"properties":{"row":{"type":"integer","minimum":0},"field":{"type":"string"},"message":{"type":"string"}},"x-readme-ref-name":"todo_import_error"}

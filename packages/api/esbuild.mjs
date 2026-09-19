@@ -9,8 +9,10 @@ import { build } from "esbuild";
 //
 // pg optionally requires a native binding and a Cloudflare-only socket shim;
 // neither exists on Lambda, so they stay external and resolve lazily.
+// Two functions, one bundle each: the API (handler.js) and the CSV import
+// ingest (import-handler.js). They share the domain/repository code.
 await build({
-  entryPoints: ["src/handler.ts"],
+  entryPoints: { handler: "src/handler.ts", "import-handler": "src/import/handler.ts" },
   outdir: "dist",
   bundle: true,
   platform: "node",

@@ -72,6 +72,26 @@ describe("query parameter validation (contract: limit 1..100, default 20)", () =
   });
 });
 
+describe("request bodies (contract: additionalProperties false)", () => {
+  it("rejects unknown body properties with 400 instead of silently dropping them", async () => {
+    const res = await invoke({
+      method: "POST",
+      resource: "/todos",
+      body: { title: "x", owner: "me" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(repo.create).not.toHaveBeenCalled();
+    const patch = await invoke({
+      method: "PATCH",
+      resource: "/todos/{todo_id}",
+      pathParameters: { todo_id: todo.todo_id },
+      body: { title: "x", owner: "me" },
+    });
+    expect(patch.statusCode).toBe(400);
+    expect(repo.update).not.toHaveBeenCalled();
+  });
+});
+
 describe("PATCH body validation (contract: minProperties 1)", () => {
   it("rejects an empty patch with 400 instead of a silent no-op 200", async () => {
     const res = await invoke({

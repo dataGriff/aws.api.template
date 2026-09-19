@@ -1,0 +1,138 @@
+# Data contract for the Todo CSV import file — Open Data Contract Standard (ODCS) v3.2.0.
+#
+# Two contracts drive this API: api/openapi.yaml (the HTTP interface) and this file (the
+# FILE interface used by POST /imports). Both are sources of truth for their own surface:
+#   * `task gen` turns this file into the runtime row validator
+#     (packages/contracts/src/generated/odcs/), which the ingest Lambda applies to every row
+#     BEFORE the same todo_create validation and domain code the API uses.
+#   * `task contract:odcs` lints it with datacontract-cli and tests the example files against it.
+#   * A unit test keeps the column constraints identical to todo_create in api/openapi.yaml.
+# Change this file first, then run `task gen`.
+apiVersion: v3.2.0
+kind: DataContract
+id: todo-import
+name: Todo import file
+version: 1.0.0
+status: active
+domain: todos
+dataProduct: todo-api
+description:
+  purpose: |
+    Bulk-create todos for the uploading user from a CSV file instead of one create_todo call per
+    todo. Each data row becomes exactly one todo owned by the caller whose token started the import.
+  usage: |
+    Call POST /imports (api/openapi.yaml) to obtain a one-time pre-signed upload target, then upload
+    the file. Processing is asynchronous and ATOMIC: the whole file is validated against this
+    contract; either every row is created or nothing is, the file is quarantined and an alert is
+    raised. GET /imports/{import_id} reports the outcome and the first violations.
+  limitations: |
+    One file creates todos for one user in one tenant — the identity comes from the uploader's token,
+    never from the file. UTF-8 only, a header row is mandatory, no other columns are accepted, and
+    the file may not exceed maxBytes / maxRows (customProperties). Rows are not de-duplicated.
+
+schema:
+  - name: todo_import
+    logicalType: object
+    physicalType: csv
+    description: |
+      One row per todo to create. The header row must name exactly these columns (any order). Empty
+      cells mean "not provided" for optional columns. Column names and constraints are identical to
+      the todo_create request body of api/openapi.yaml.
+    properties:
+      - name: title
+        businessName: Title
+        logicalType: string
+        physicalType: string
+        required: true
+        description: Short title of the todo (1–200 characters)
+        logicalTypeOptions:
+          minLength: 1
+          maxLength: 200
+        examples: ["Write the tutorial", "Renew the certificate"]
+        quality:
+          - metric: nullValues
+            mustBe: 0
+            description: Every row must have a title
+      - name: description
+        businessName: Description
+        logicalType: string
+        physicalType: string
+        required: false
+        description: Longer free text (up to 2000 characters)
+        logicalTypeOptions:
+          maxLength: 2000
+        examples: ["Cover the local stack and the import flow"]
+      - name: status
+        businessName: Status
+        logicalType: string
+        physicalType: string
+        required: false
+        description: Lifecycle state; defaults to open when empty
+        enum:
+          - value: open
+            label: Open
+          - value: in_progress
+            label: In progress
+          - value: done
+            label: Done
+        examples: ["open", "done"]
+      - name: due_date
+        businessName: Due date
+        logicalType: date
+        physicalType: string
+        required: false
+        description: Calendar day the todo is due, ISO 8601 (no time or zone)
+        logicalTypeOptions:
+          format: yyyy-MM-dd
+        examples: ["2030-01-31"]
+    quality:
+      - metric: rowCount
+        mustBeBetween: [1, 1000]
+        description: A file must hold between 1 and maxRows data rows (see customProperties)
+
+servers:
+  - server: example
+    type: local
+    description: The example file the contract is tested against in CI (task contract:odcs)
+    path: api/examples/todo-import.valid.csv
+    format: csv
+    delimiter: ","
+  - server: example_invalid
+    type: local
+    description: |
+      A file that violates the contract (empty title, unknown status, wrong date format); the
+      contract test asserts it FAILS, so a weakened contract is caught.
+    path: api/examples/todo-import.invalid.csv
+    format: csv
+    delimiter: ","
+  - server: uploads
+    type: s3
+    description: |
+      Where uploaded files land (pre-signed POST from create_import). The key embeds the uploader's
+      tenant and the import id; the ingest Lambda trusts the import record, never the file.
+    location: s3://<service>-<env>-imports-<account>/uploads/{tenant_id}/{import_id}.csv
+    format: csv
+    delimiter: ","
+
+# Physical constraints the code enforces. Generated into the runtime validator by `task gen`.
+customProperties:
+  - property: encoding
+    value: utf-8
+  - property: header
+    value: true
+  - property: maxBytes
+    value: 1048576
+  - property: maxRows
+    value: 1000
+  - property: rejectionPolicy
+    value: whole_file
+  - property: quarantinePrefix
+    value: quarantine/
+
+support:
+  - channel: issues
+    tool: other
+    url: https://github.com/dataGriff/aws.api.template/issues
+    description: Contract questions and change requests
+
+tags: [todos, import, csv]

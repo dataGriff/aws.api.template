@@ -16,13 +16,28 @@ The template is secure-by-default.
 - **Consumer gating**: API keys + usage plans (throttling, quotas); WAF (opt-in, on in staging/prod)
   with the Common, Known-Bad-Inputs (Log4j) and IP-reputation managed rule groups, a rate-based rule,
   and full request logging to CloudWatch with credentials redacted.
+- **File uploads (CSV import)**: the file never passes through the API or the Lambda's memory over
+  HTTP. `POST /imports` records the import for the token's identity and mints a **pre-signed S3
+  POST** whose policy pins the object key (`uploads/<tenant>/<import_id>.csv`), the content type,
+  a `content-length-range` up to the contract's `maxBytes` and SSE-KMS with the stack's data key —
+  S3 refuses anything else before it is stored. The bucket blocks public access, is versioned,
+  TLS-only and denies unencrypted or differently keyed writes by policy; access logs go to a
+  separate bucket. The ingest Lambda trusts only the `todo_imports` row the key maps to (never the
+  file or the key) for tenant/user, validates the **whole file** against the ODCS data contract and
+  then the same `todo_create` schema and NUL check as the API, and either creates every row in one
+  transaction or **quarantines** the object with a full report (`quarantine/`, retained 90 days),
+  records `rejected` with the first errors and raises the `import_rejected` alarm. Objects that did
+  not come through the API are quarantined too. The ingest role can read/delete `uploads/*` and
+  write `quarantine/*`, nothing else; the API role can only create under `uploads/*`. Delivery is
+  at-least-once, so the final status transition is guarded in SQL inside the insert transaction.
 - **Secrets**: Secrets Manager (+ rotation); prefer RDS Proxy IAM auth. Nothing sensitive in the repo.
 - **Network**: VPC flow logs on; the VPC default security group is stripped of all rules; workload
   security groups only allow the egress they need (443 to the interface endpoints and the DynamoDB
   prefix list, 5432 to the proxy/database) — `0.0.0.0/0` exists only with the opt-in static-egress NAT.
 - **Data**: two customer-managed KMS keys per stack — `data` (database storage, Performance Insights,
-  credential secret, idempotency table) and `ops` (every CloudWatch log group, the alarm SNS topic,
-  Lambda environment variables), each with an explicit key policy; TLS
+  credential secret, idempotency table, import bucket objects) and `ops` (every CloudWatch log
+  group, the alarm SNS topic, the import queues, Lambda environment variables), each with an
+  explicit key policy; TLS
   enforced by the server (`rds.force_ssl = 1`) as well as by RDS Proxy; multi-AZ, backups and deletion
   protection are mandatory in prod (stack validations). The Cognito user pool carries deletion
   protection wherever `deletion_protection` is set.

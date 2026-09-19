@@ -33,6 +33,15 @@ const schema = z.object({
   IDEMPOTENCY_TABLE: z.string().optional(),
   // Optional endpoint override (DynamoDB Local in tests), like DATABASE_URL for Postgres.
   IDEMPOTENCY_ENDPOINT: z.string().url().optional(),
+
+  // CSV import pipeline (POST /imports). The bucket receives pre-signed POST
+  // uploads; objects must be encrypted with this CMK (enforced by the bucket
+  // policy and by the signed upload conditions). Unset = imports disabled (503).
+  IMPORT_BUCKET: z.string().optional(),
+  IMPORT_KMS_KEY_ARN: z.string().optional(),
+  // Optional S3 endpoint override (moto locally / in tests), like DATABASE_URL
+  // for Postgres. Forces path-style addressing so bucket names need no DNS.
+  AWS_ENDPOINT_URL: z.string().url().optional(),
 });
 
 export type AppConfig = z.infer<typeof schema>;

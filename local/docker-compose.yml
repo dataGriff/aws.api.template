@@ -37,5 +37,23 @@ services:
     volumes:
       - ../api/openapi.yaml:/openapi.yaml:ro
 
+  # S3 + SQS + KMS for the CSV import pipeline (moto server, Apache-2.0; no
+  # account or token needed). `task up` provisions the bucket, queue, key and
+  # bucket notification with local/aws-local-init.mjs. State is in-memory:
+  # `task down` wipes it.
+  moto:
+    image: motoserver/moto:5.2.3
+    ports:
+      - "5000:5000"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'python -c "import urllib.request; urllib.request.urlopen(''http://localhost:5000/moto-api/'')"',
+        ]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
 volumes:
   pgdata:

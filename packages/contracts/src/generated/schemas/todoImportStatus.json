@@ -1,0 +1,1 @@
+{"type":"string","description":"`awaiting_upload` until the file arrives, `processing` while it is validated, then\n`completed` (every row created) or `rejected` (nothing created, file quarantined).\n","enum":["awaiting_upload","processing","completed","rejected"],"x-readme-ref-name":"todo_import_status"}

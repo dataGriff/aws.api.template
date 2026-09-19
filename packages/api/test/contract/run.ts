@@ -2,10 +2,12 @@
 // stack, so the gate does not rely solely on in-process handler invocation.
 //
 //   Postgres (testcontainers)  <-  local/server.ts (stub authorizer, loopback)
+//   moto: S3 + SQS + KMS      <-        ^  (pre-signed uploads for POST /imports)
 //        ^ every migration via node-pg-migrate      ^
 //        |                                          |  real HTTP
 //        +-- provider: Schemathesis (--checks all, stateful via links)
-//        +-- consumer: the generated SDK through every operation (sdk-consumer.ts)
+//        +-- consumer: the generated SDK through every operation (sdk-consumer.ts),
+//            including a real CSV upload to S3 and the ingest fed from the queue
 //        +-- collection: httpyac replays the generated .http files
 //
 // Backward compatibility of the contract itself is a separate, Docker-free
@@ -16,14 +18,14 @@
 // WAF). That is the opt-in fuzz.yml run against a deployed stage.
 //
 // Hermetic: a fresh container and a random loopback port per run, torn down on
-// exit (including failure / SIGINT). Set TEST_DATABASE_URL to reuse an existing
-// empty Postgres instead of Docker (migrations still run) — the same switch the
-// integration and BDD suites honour.
+// exit (including failure / SIGINT). Set TEST_DATABASE_URL / TEST_AWS_ENDPOINT_URL
+// to reuse an existing empty Postgres / moto instead of Docker (migrations and
+// provisioning still run) — the same switches the integration and BDD suites honour.
 import { spawn, type ChildProcess } from "node:child_process";
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
 import { createServer } from "node:net";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -83,6 +85,22 @@ async function startDatabase(): Promise<string> {
   return db.connectionUri;
 }
 
+// --- 1b. S3/SQS/KMS (moto) ---------------------------------------------------
+async function startStorage(): Promise<import("../helpers/aws.js").StartedAws> {
+  console.log(
+    process.env.TEST_AWS_ENDPOINT_URL
+      ? "▶ using TEST_AWS_ENDPOINT_URL (no container) and provisioning the import pipeline"
+      : "▶ starting moto (testcontainers) and provisioning the import pipeline",
+  );
+  const { startAws } = await import("../helpers/aws.js");
+  const aws = await startAws();
+  cleanups.push(async () => {
+    console.log("▶ stopping moto");
+    await aws.stop();
+  });
+  return aws;
+}
+
 // --- 2. Local server --------------------------------------------------------
 async function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -100,6 +118,7 @@ async function startServer(databaseUrl: string, port: number): Promise<string> {
   const baseUrl = `http://127.0.0.1:${port}/v1`;
   console.log(`▶ starting local/server.ts on ${baseUrl}`);
   // The stub authorizer only runs with APP_ENV=local (enforced by the server).
+  // process.env carries the moto endpoint, bucket, key and queue set by startAws().
   const child: ChildProcess = spawn("pnpm", ["exec", "tsx", "../../local/server.ts"], {
     cwd: apiDir,
     stdio: ["ignore", "inherit", "inherit"],
@@ -220,10 +239,15 @@ async function httpyac(
   token: string,
   extraVars: string[],
 ): Promise<HttpyacReport> {
+  // Every GENERATED file of the collection (gateway.http is hand-written for the
+  // deployed stage and asserts API Gateway behaviour the stub cannot produce).
+  const generated = readdirSync(join(root, "collections"))
+    .filter((f) => f.endsWith(".http") && f !== "gateway.http")
+    .sort()
+    .map((f) => `collections/${f}`);
   const args = [
     "send",
-    "collections/todos.http",
-    "collections/health.http",
+    ...generated,
     "--all",
     "--env",
     "local",
@@ -280,20 +304,28 @@ async function runHttpCollection(baseUrl: string, token: string): Promise<void> 
 
   console.log("▶ httpyac pass 1: collection as generated (--env local)");
   const first = check(await httpyac(baseUrl, token, []), "as-generated", false);
-  for (const mustPass of ["get_health", "list_todos", "create_todo"]) {
+  for (const mustPass of ["get_health", "list_todos", "create_todo", "create_import"]) {
     if (declared.has(mustPass) && !first.has(mustPass))
       failures.push(`as-generated: ${mustPass} missing from the collection`);
   }
 
-  console.log("▶ httpyac pass 2: with a real todo_id");
-  const created = await fetch(`${baseUrl}/todos`, {
-    method: "POST",
-    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-    body: JSON.stringify({ title: "http-layer fixture" }),
-  });
-  if (created.status !== 201) fail(`fixture POST /todos returned ${created.status}`);
-  const { todo_id } = (await created.json()) as { todo_id: string };
-  check(await httpyac(baseUrl, token, [`todo_id=${todo_id}`]), "real-id", true);
+  console.log("▶ httpyac pass 2: with a real todo_id and import_id");
+  const post = async (path: string, body: unknown) => {
+    const res = await fetch(`${baseUrl}${path}`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (res.status !== 201) fail(`fixture POST ${path} returned ${res.status}`);
+    return (await res.json()) as Record<string, string>;
+  };
+  const { todo_id } = await post("/todos", { title: "http-layer fixture" });
+  const { import_id } = await post("/imports", { file_name: "fixture.csv" });
+  check(
+    await httpyac(baseUrl, token, [`todo_id=${todo_id}`, `import_id=${import_id}`]),
+    "real-id",
+    true,
+  );
 
   if (failures.length) fail(`.http collection failed:\n  - ${failures.join("\n  - ")}`);
 }
@@ -301,13 +333,23 @@ async function runHttpCollection(baseUrl: string, token: string): Promise<void> 
 // --- main -------------------------------------------------------------------
 try {
   const databaseUrl = await startDatabase();
+  const aws = await startStorage();
   const port = Number(process.env.HTTP_TEST_PORT ?? (await freePort()));
   const baseUrl = await startServer(databaseUrl, port);
   const token = await mintToken();
   await runSchemathesis(baseUrl, token);
-  await runSdkConsumer(baseUrl, token);
+  // The SDK walk uploads a real file; the ingest runs in this process, fed from
+  // the queue S3 notified, exactly as the Lambda mapping would feed it.
+  const { processUntilOutcome } = await import("../../../../local/import-queue.js");
+  const { handler: ingest } = await import("../../src/import/handler.js");
+  await runSdkConsumer(baseUrl, token, async () => {
+    const outcomes = await processUntilOutcome(aws.sqs, aws.queueUrl, ingest as never);
+    if (!outcomes.length) fail("no S3 notification reached the import queue");
+  });
   await runHttpCollection(baseUrl, token);
-  console.log("✔ contract layer passed (provider conformance, SDK consumer, .http collection)");
+  console.log(
+    "✔ contract layer passed (provider conformance, SDK consumer incl. CSV import, .http collection)",
+  );
   await cleanupAll();
   process.exit(0);
 } catch (err) {

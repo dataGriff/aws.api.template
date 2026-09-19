@@ -16,3 +16,8 @@ output "ingress_static_ips" {
 output "custom_domain" {
   value = var.custom_domain_enabled ? module.custom_dns[0].domain_name : null
 }
+output "import_bucket" {
+  value       = module.import_pipeline.bucket_name
+  description = "CSV imports land under uploads/ and rejected files under quarantine/"
+}
+output "import_dead_letter_queue" { value = module.import_pipeline.dead_letter_queue_name }

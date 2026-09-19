@@ -151,6 +151,11 @@ variable "api_quota_limit" {
   type    = number
   default = 100000
 }
+variable "import_quarantine_retention_days" {
+  type        = number
+  default     = 90
+  description = "How long CSV files rejected by the data contract (and their reports) stay in the import bucket's quarantine/ prefix"
+}
 variable "log_retention_days" {
   type        = number
   default     = 365
