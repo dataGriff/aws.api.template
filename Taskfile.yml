@@ -261,6 +261,22 @@ tasks:
       # the failed checks are also rendered as a Markdown table in the job summary.
       - mkdir -p test-results
       - checkov -d {{.TF_DIR}} --config-file .checkov.yaml -o cli -o github_failed_only --output-file-path console,test-results/checkov-failed.md
+  tf:bootstrap:
+    desc: "One-time: create the TF state backend + GitHub OIDC deploy roles. STATE_BUCKET=<globally-unique> GITHUB_REPOSITORY=<owner/repo>. Needs local admin AWS creds. See docs/operations."
+    dir: "{{.TF_DIR}}/bootstrap"
+    preconditions:
+      - sh: test -n "$STATE_BUCKET"
+        msg: "Set STATE_BUCKET=<globally-unique S3 bucket name for TF state>."
+      - sh: test -n "$GITHUB_REPOSITORY"
+        msg: "Set GITHUB_REPOSITORY=<owner/repo> so the OIDC trust is scoped to your repo (default is the template's own repo)."
+    cmds:
+      # Local backend — this run CREATES the remote backend the envs then use.
+      - terraform init -input=false
+      - terraform apply -input=false -var=state_bucket="$STATE_BUCKET" -var=github_repository="$GITHUB_REPOSITORY"
+      # Prints state_bucket / state_kms_key_arn / deploy_role_arns to wire into
+      # the GitHub Environments (see docs/operations).
+      - terraform output
+
   tf:plan:
     desc: "Terraform plan for an env, e.g. task tf:plan ENV=dev (needs TF_STATE_BUCKET)"
     dir: "{{.TF_DIR}}/envs/{{.ENV}}"
