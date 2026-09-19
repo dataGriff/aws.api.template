@@ -1,7 +1,7 @@
 import type { Todo, TodoCreate, TodoStatus, TodoUpdate } from "@app/contracts";
 import { z } from "zod";
 import type { AuthContext } from "../auth/claims.js";
-import { query } from "../db/pool.js";
+import { db, query, type Queryable } from "../db/pool.js";
 import { BadRequestError } from "../errors.js";
 
 interface TodoRow {
@@ -107,8 +107,14 @@ export async function getById(auth: AuthContext, todoId: string): Promise<Todo |
   return rows[0] ? toTodo(rows[0]) : null;
 }
 
-export async function create(auth: AuthContext, input: TodoCreate): Promise<Todo> {
-  const rows = await query<TodoRow>(
+// `conn` lets a caller run several creates atomically (withTransaction); the
+// default is the pool, i.e. one auto-committed statement.
+export async function create(
+  auth: AuthContext,
+  input: TodoCreate,
+  conn: Queryable = db,
+): Promise<Todo> {
+  const rows = await conn.query<TodoRow>(
     `INSERT INTO todos (tenant_id, user_sub, title, description, status, due_date)
      VALUES ($1, $2, $3, $4, COALESCE($5, 'open'), $6)
      RETURNING todo_id, title, description, status, due_date, created_at, updated_at`,

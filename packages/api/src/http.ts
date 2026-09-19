@@ -37,7 +37,12 @@ export function parseBody<T>(event: APIGatewayProxyEvent, schema: z.ZodTypeAny):
 // `field` names the value being validated when the schema has no path of its
 // own (a single header or path parameter), so the 400 points at the right thing.
 export function validate<T>(schema: z.ZodTypeAny, value: unknown, field = "(root)"): T {
-  const result = schema.safeParse(value);
+  // The contract declares additionalProperties: false on every request body,
+  // which API Gateway enforces at the edge. The generated zod objects would
+  // silently strip unknown keys instead; make them reject, so local and
+  // deployed behaviour (and the 400s the contract promises) agree.
+  const strict = schema instanceof z.ZodObject ? schema.strict() : schema;
+  const result = strict.safeParse(value);
   if (!result.success) {
     throw new BadRequestError(
       "Request validation failed",

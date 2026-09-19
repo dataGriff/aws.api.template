@@ -81,7 +81,36 @@ docker compose -f local/docker-compose.yml up prism    # http://localhost:4010
 Point your client at the mock while the real API is still being built. Because both derive from the same
 contract, switching to the real endpoint later is just a base-URL change.
 
-## 5. Contract conventions to rely on
+## 5. Import todos from a CSV file
+
+Bulk creation is a two-step, asynchronous flow; the file format is a separate data contract,
+[`api/todo-import.odcs.yaml`](../../api/todo-import.odcs.yaml) (ODCS 3.2): a UTF-8 CSV with the header
+`title,description,status,due_date` (any order), up to 1000 rows / 1 MiB, with exactly the same
+constraints per column as `todo_create`. Example: [`api/examples/todo-import.valid.csv`](../../api/examples/todo-import.valid.csv).
+
+```ts
+import { createImport, getImport } from "@app/sdk";
+
+const started = await createImport({ file_name: "todos.csv" }, { client }); // 201
+const form = new FormData();
+for (const [k, v] of Object.entries(started.upload!.fields)) form.append(k, v); // signed fields first…
+form.append("file", new Blob([csvBytes], { type: "text/csv" }), "todos.csv"); // …the file LAST
+await fetch(started.upload!.url, { method: "POST", body: form }); // straight to S3, expires in 15 min
+
+let status = await getImport(started.import_id, { client });
+while (status.status === "awaiting_upload" || status.status === "processing") {
+  await new Promise((r) => setTimeout(r, 1000));
+  status = await getImport(started.import_id, { client });
+}
+// status.status: "completed" (created_count rows) | "rejected" (nothing created; status.errors[] names row + field)
+```
+
+The file is validated as a whole: one bad row rejects the entire file (nothing is created, the file is
+quarantined for the operators, and `errors` lists the first 100 violations with their 1-based row —
+row 0 means the file itself: header, encoding, size). S3 itself refuses uploads over `max_bytes` or
+with another content type. `scripts/import-file.mjs` is a runnable reference of the flow.
+
+## 6. Contract conventions to rely on
 
 - **Errors** are RFC 7807 `application/problem+json` with a `request_id` for support.
 - **Pagination** is cursor-based: pass the `next_cursor` from a page back as `cursor`.

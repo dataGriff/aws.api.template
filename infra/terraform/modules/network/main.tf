@@ -183,3 +183,13 @@ resource "aws_vpc_endpoint" "dynamodb" {
   route_table_ids   = [aws_route_table.private.id]
   tags              = merge(var.tags, { Name = "${var.name}-dynamodb" })
 }
+
+# S3 for the CSV import bucket (pre-signed uploads are signed offline; the
+# ingest reads/moves objects from inside the VPC).
+resource "aws_vpc_endpoint" "s3" {
+  vpc_id            = aws_vpc.this.id
+  service_name      = "com.amazonaws.${var.region}.s3"
+  vpc_endpoint_type = "Gateway"
+  route_table_ids   = [aws_route_table.private.id]
+  tags              = merge(var.tags, { Name = "${var.name}-s3" })
+}

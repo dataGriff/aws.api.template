@@ -19,15 +19,26 @@ Work in a branch. Make small commits per step. Never edit generated code by hand
 - **Enforce the naming standard:** all schema properties, query/path params, and enum values must be
   `lower_snake_case` (Redocly fails otherwise). Run `task spec:lint` until clean.
 
+### 1b. The file contract (if your API keeps a bulk import)
+
+`api/todo-import.odcs.yaml` (ODCS 3.2) describes the CSV that `POST /imports` accepts. Either
+rewrite it for your resource — one schema object whose properties are exactly the columns, with
+the same constraints as your create schema (a unit test, `test/unit/contracts-drift.test.ts`,
+enforces that) and `customProperties` `maxBytes`/`maxRows` — and update `api/examples/*.csv`, the
+`rowToTodoCreate` mapping in `packages/api/src/import/csv.ts` and the ingest's `createTodo` call; or
+remove the import entirely (`/imports` paths, `packages/api/src/import/`, `domain/imports.ts`,
+`repo/imports-repo.ts`, the migration, `infra/terraform/modules/import-pipeline`, the moto service
+and `contract:odcs` task). `task contract:odcs` must stay green either way.
+
 ## 2. Regenerate everything
 
 ```bash
 task gen
 ```
 
-This rewrites: `packages/contracts` (zod + types), `packages/sdk` (client), `collections/*.http`,
-`docs/api-reference/`, and `infra/terraform/modules/api-gateway/openapi.gateway.yaml`. Commit the
-regenerated artifacts.
+This rewrites: `packages/contracts` (zod + types, and `generated/odcs/` from the ODCS file),
+`packages/sdk` (client), `collections/*.http`, `docs/api-reference/`, and
+`infra/terraform/modules/api-gateway/openapi.gateway.yaml`. Commit the regenerated artifacts.
 
 ## 3. Rename the service
 
@@ -97,6 +108,7 @@ open a draft PR, and hand back.
 ## Checklist
 
 - [ ] `api/openapi.yaml` replaced, `task spec:lint` clean (snake_case enforced)
+- [ ] `api/*.odcs.yaml` rewritten or the import removed; `task contract:odcs` clean
 - [ ] `task gen` run; generated artifacts committed
 - [ ] `service_name` renamed everywhere
 - [ ] migrations, repo, domain, router replaced (+ `local/server.ts` ROUTES, `scripts/mint-token.mjs` claims)

@@ -127,6 +127,21 @@ data "aws_iam_policy_document" "kms_ops" {
       identifiers = ["cloudwatch.amazonaws.com"]
     }
   }
+  # S3 publishes import-bucket notifications into the CMK-encrypted SQS queue.
+  statement {
+    sid       = "S3NotificationsToSqs"
+    actions   = ["kms:Decrypt", "kms:GenerateDataKey*"]
+    resources = ["*"]
+    principals {
+      type        = "Service"
+      identifiers = ["s3.amazonaws.com"]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [data.aws_caller_identity.current.account_id]
+    }
+  }
 }
 
 resource "aws_kms_key" "ops" {
@@ -139,9 +154,10 @@ resource "aws_kms_key" "ops" {
 
 # App security groups owned here to avoid a database<->lambda dependency cycle.
 # Egress is scoped to what the workload actually talks to: AWS APIs through the
-# interface endpoints (443, inside the VPC), DynamoDB through its gateway
-# endpoint (443, managed prefix list) and Postgres through the proxy/instance
-# (5432, inside the VPC). Only the opt-in static-egress NAT path opens 0.0.0.0/0.
+# interface endpoints (443, inside the VPC), DynamoDB and S3 through their
+# gateway endpoints (443, managed prefix lists) and Postgres through the
+# proxy/instance (5432, inside the VPC). Only the opt-in static-egress NAT path
+# opens 0.0.0.0/0. Both Lambdas (API + import ingest) share this group.
 resource "aws_security_group" "lambda" {
   #checkov:skip=CKV_AWS_382:The only 0.0.0.0/0 egress rule is the dynamic block gated by enable_egress_static_ip (opt-in NAT for third-party calls); default egress is VPC-internal + the DynamoDB prefix list
   name_prefix = "${local.name}-lambda-"
@@ -155,11 +171,11 @@ resource "aws_security_group" "lambda" {
     cidr_blocks = [module.network.vpc_cidr]
   }
   egress {
-    description     = "HTTPS to DynamoDB via the gateway endpoint"
+    description     = "HTTPS to DynamoDB and S3 via their gateway endpoints"
     from_port       = 443
     to_port         = 443
     protocol        = "tcp"
-    prefix_list_ids = [module.network.dynamodb_prefix_list_id]
+    prefix_list_ids = [module.network.dynamodb_prefix_list_id, module.network.s3_prefix_list_id]
   }
   egress {
     description = "Postgres to RDS Proxy / instance inside the VPC"
@@ -314,7 +330,33 @@ module "lambda_api" {
   rds_proxy_resource_id  = var.enable_rds_proxy ? module.rds_proxy[0].proxy_resource_id : null
   idempotency_table_name = aws_dynamodb_table.idempotency.name
   idempotency_table_arn  = aws_dynamodb_table.idempotency.arn
+  import_bucket_name     = module.import_pipeline.bucket_name
+  import_bucket_arn      = module.import_pipeline.bucket_arn
   tags                   = local.tags
+}
+
+# CSV import: bucket + queue + ingest Lambda (POST /imports). Same network
+# placement and database access as the API; its own least-privilege role.
+module "import_pipeline" {
+  source                    = "../modules/import-pipeline"
+  name                      = local.name
+  env                       = var.env
+  region                    = var.region
+  subnet_ids                = module.network.private_subnet_ids
+  security_group_ids        = [aws_security_group.lambda.id]
+  dist_dir                  = var.api_dist_dir
+  db_host                   = local.db_host
+  db_name                   = var.db_name
+  db_user                   = var.db_username
+  secret_arn                = module.secrets.secret_arn
+  rds_iam_auth              = var.enable_rds_proxy
+  rds_proxy_resource_id     = var.enable_rds_proxy ? module.rds_proxy[0].proxy_resource_id : null
+  data_kms_key_arn          = aws_kms_key.data.arn
+  ops_kms_key_arn           = aws_kms_key.ops.arn
+  alarm_topic_arn           = module.observability.alarm_topic_arn
+  quarantine_retention_days = var.import_quarantine_retention_days
+  log_retention_days        = var.log_retention_days
+  tags                      = local.tags
 }
 
 module "api_gateway" {

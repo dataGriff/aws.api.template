@@ -67,3 +67,8 @@ variable "data_kms_key_arn" {
   type        = string
   description = "CMK protecting the DB secret and idempotency table (grants kms:Decrypt to the role)"
 }
+variable "import_bucket_name" {
+  type        = string
+  description = "S3 bucket the API mints pre-signed CSV upload targets for"
+}
+variable "import_bucket_arn" { type = string }

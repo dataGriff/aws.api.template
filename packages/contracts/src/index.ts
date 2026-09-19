@@ -3,3 +3,5 @@
 // edited by hand). Hand-written refinements or helpers can be added below.
 export * from "./generated/types/index.js";
 export * as schemas from "./generated/zod/index.js";
+// File contracts (ODCS) rendered by scripts/gen-odcs.mjs: row validators + limits.
+export * from "./generated/odcs/index.js";

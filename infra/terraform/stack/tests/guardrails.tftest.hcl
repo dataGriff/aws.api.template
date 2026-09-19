@@ -170,6 +170,46 @@ run "dev_defaults" {
   }
 }
 
+# --- CSV import pipeline: the upload bucket is private, encrypted and wired ----
+run "import_pipeline_hardened" {
+  command = plan
+  variables {
+    env = "dev"
+  }
+  assert {
+    condition     = module.import_pipeline.bucket_public_access_blocked == true
+    error_message = "the import bucket must block all public access"
+  }
+  assert {
+    condition     = module.import_pipeline.bucket_versioning == "Enabled"
+    error_message = "the import bucket must be versioned"
+  }
+  assert {
+    condition     = module.import_pipeline.bucket_sse_algorithm == "aws:kms"
+    error_message = "import objects must be encrypted with a KMS key (the stack's data CMK is passed in)"
+  }
+  assert {
+    condition     = contains(module.import_pipeline.lifecycle_rule_ids, "expire-unprocessed-uploads") && contains(module.import_pipeline.lifecycle_rule_ids, "expire-quarantine")
+    error_message = "uploads and quarantine need lifecycle expiry rules"
+  }
+  assert {
+    condition     = module.import_pipeline.notification_prefixes == ["uploads/"]
+    error_message = "only uploads/ may trigger the ingest (quarantine writes must not loop back)"
+  }
+  assert {
+    condition     = module.import_pipeline.max_receive_count == 3
+    error_message = "failed ingests must dead-letter after 3 attempts"
+  }
+  assert {
+    condition     = module.import_pipeline.ingest_in_vpc && module.import_pipeline.ingest_reserved_concurrency == 2
+    error_message = "the ingest runs inside the VPC with bounded concurrency"
+  }
+  assert {
+    condition     = length([for r in aws_security_group.lambda.egress : r if strcontains(r.description, "S3")]) == 1
+    error_message = "lambda egress must reach S3 (and DynamoDB) through the gateway endpoints"
+  }
+}
+
 run "static_egress_opens_nat_route" {
   command = plan
   variables {

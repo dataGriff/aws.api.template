@@ -45,3 +45,16 @@ asserts isolation on each axis independently so removing either predicate fails 
 **ADR-11: Deploy only what CI validated.** The Deploy workflow is triggered by a successful CI run
 (not by the push itself), applies a saved plan, and serialises per environment. Renovate never
 auto-merges runtime dependencies because `main` deploys itself.
+
+**ADR-12: File import = a second contract (ODCS) + pre-signed S3 upload + asynchronous, atomic
+ingest.** Bulk creation by file must not duplicate the API's rules, so the file format is its own
+machine-readable contract (ODCS 3.2, `api/todo-import.odcs.yaml`) that `task gen` turns into a row
+validator, drift-checked against `todo_create`; rows then go through the API's own generated schema
+and `createTodo`. Files bypass API Gateway (10 MB, 29 s) via a **pre-signed S3 POST** whose policy
+pins key, content type, size range and SSE-KMS key — the only way to bound size at the edge. The
+whole file is accepted or rejected (simple to reason about, matches the ask); a rejected file is
+quarantined with its report, recorded on the import and alarmed. S3 → SQS → Lambda (not S3 → Lambda
+directly) buys retries, a dead-letter queue and bounded concurrency against the database. Locally
+and in CI **moto** emulates S3/SQS/KMS: LocalStack now requires an auth token and its free plan is
+non-commercial only, and MinIO's community edition is unmaintained, so neither fits a reusable
+template; moto is Apache-2.0 and covers bucket notifications, which S3Mock does not.

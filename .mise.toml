@@ -27,6 +27,10 @@ lefthook = "2.1.14"
 "pipx:checkov" = "3.3.19"
 "pipx:semgrep" = "1.177.0"
 "pipx:harlequin" = "2.15.0"
+# ODCS data-contract lint + example-file tests (task contract:odcs). The extras
+# bring the CSV reader and the DuckDB engine `datacontract test` runs on; mise
+# only honours them through the `extras` option, not in the tool name.
+"pipx:datacontract-cli" = { version = "1.2.0", extras = "csv,duckdb" }
 
 [env]
 # Loaded into the shell (and CI) for every task. Non-secret defaults only.
