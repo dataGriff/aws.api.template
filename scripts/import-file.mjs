@@ -35,7 +35,14 @@ const call = async (path, init = {}) => {
   });
   const body = await res.json().catch(() => undefined);
   if (!res.ok) {
-    console.error(`${init.method ?? "GET"} ${path} → ${res.status}`, JSON.stringify(body, null, 2));
+    // Constant format string: user-controlled text never becomes the format.
+    console.error(
+      "%s %s → %d\n%s",
+      init.method ?? "GET",
+      path,
+      res.status,
+      JSON.stringify(body, null, 2),
+    );
     process.exit(1);
   }
   return body;
