@@ -1,8 +1,8 @@
+# nosemgrep: package_managers.pnpm.pnpm-missing-minimum-release-age.pnpm-minimum-release-age, package_managers.pnpm.pnpm-trust-policy.pnpm-trust-policy, package_managers.pnpm.pnpm-block-exotic-sub-dependencies.pnpm-block-exotic-sub-dependencies
 packages:
   - "packages/*"
-# Semgrep's pnpm supply-chain rules want minimumReleaseAge / trustPolicy /
-# blockExoticSubdependencies here; those settings exist from pnpm 10 and this
+# Semgrep's pnpm supply-chain rules (suppressed on line 1) want minimumReleaseAge /
+# trustPolicy / blockExoticSubdeps here; those settings exist from pnpm 10 and this
 # workspace pins pnpm 9 (.mise.toml / packageManager). Release-age gating is
 # enforced by Renovate (renovate.json: minimumReleaseAge) and installs run with
 # --frozen-lockfile. Revisit when moving to pnpm 10.
-# nosemgrep: package_managers.pnpm.pnpm-missing-minimum-release-age.pnpm-minimum-release-age, package_managers.pnpm.pnpm-trust-policy.pnpm-trust-policy, package_managers.pnpm.pnpm-block-exotic-sub-dependencies.pnpm-block-exotic-sub-dependencies

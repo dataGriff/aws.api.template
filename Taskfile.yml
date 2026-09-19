@@ -241,7 +241,7 @@ tasks:
       # Checkov policy + justified skips live in .checkov.yaml. In GitHub Actions
       # the failed checks are also rendered as a Markdown table in the job summary.
       - mkdir -p test-results
-      - checkov -d {{.TF_DIR}} --config-file .checkov.yaml -o cli -o github_failed_only --output-file-path console,test-results
+      - checkov -d {{.TF_DIR}} --config-file .checkov.yaml -o cli -o github_failed_only --output-file-path console,test-results/checkov-failed.md
   tf:plan:
     desc: "Terraform plan for an env, e.g. task tf:plan ENV=dev (needs TF_STATE_BUCKET)"
     dir: "{{.TF_DIR}}/envs/{{.ENV}}"
