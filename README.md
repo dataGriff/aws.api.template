@@ -22,8 +22,9 @@ skill (after authoring your contract with the contract template's `author-contra
 ## Quickstart
 
 ```bash
-# 0. Registry auth for the contract package (GitHub Packages, scope @datagriff):
-#    add `//npm.pkg.github.com/:_authToken=<PAT with read:packages>` to ~/.npmrc
+# 0. Registry auth for the contract package (GitHub Packages, scope @datagriff), once per
+#    machine: `task registry:login` reuses your `gh` login (no PAT to create); or add
+#    `//npm.pkg.github.com/:_authToken=<PAT with read:packages>` to ~/.npmrc yourself
 
 # 1. Install every pinned tool (node, pnpm, terraform, task, scanners, ...)
 mise install

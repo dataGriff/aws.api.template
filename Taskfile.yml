@@ -82,6 +82,33 @@ tasks:
     silent: true
     cmds:
       - node scripts/contract-path.mjs --dir
+  registry:login:
+    desc: "Registry auth for the contract package WITHOUT a PAT: reuse your GitHub CLI login (adds the read:packages scope) and write the token line to ~/.npmrc. Once per machine."
+    preconditions:
+      - sh: command -v gh
+        msg: "GitHub CLI not found (https://cli.github.com). Alternative: put `//npm.pkg.github.com/:_authToken=<PAT with read:packages>` in ~/.npmrc yourself."
+      - sh: gh auth status --hostname github.com
+        msg: "Not logged in to github.com — run `gh auth login` first."
+    cmds:
+      # The default gh scopes do not include read:packages; refresh adds it
+      # (interactive, once). The token is written only to the user-level npmrc,
+      # never anywhere under the repo, and is never echoed.
+      - |
+        set -euo pipefail
+        if ! gh auth status --hostname github.com 2>&1 | grep -q "read:packages"; then
+          gh auth refresh --hostname github.com --scopes read:packages
+        fi
+        token="$(gh auth token --hostname github.com)"
+        npmrc="$HOME/.npmrc"
+        touch "$npmrc" && chmod 600 "$npmrc"
+        line="//npm.pkg.github.com/:_authToken=$token"
+        if grep -q '^//npm.pkg.github.com/:_authToken=' "$npmrc"; then
+          # replace the existing line (sed -i.bak works on both BSD and GNU sed)
+          sed -i.bak "s#^//npm.pkg.github.com/:_authToken=.*#$line#" "$npmrc" && rm -f "$npmrc.bak"
+        else
+          printf '%s\n' "$line" >> "$npmrc"
+        fi
+        echo "~/.npmrc now authenticates npm.pkg.github.com with your gh login — pnpm install will resolve the contract package."
   deps:lock:
     desc: "Resolve pnpm-lock.yaml without installing (after task contract:bump). Needs registry auth; the Lockfile workflow runs this in CI with GITHUB_TOKEN when you have none locally."
     cmds:

@@ -23,8 +23,10 @@ Work in a branch. Make small commits per step. Never edit generated code by hand
 - If the package name changed, replace `@datagriff/todo-api-contract` everywhere
   (`packages/api/package.json`, `scripts/lib/contract.mjs`, `.npmrc` scope, `renovate.json`,
   `Taskfile.yml`, docs); else just `task contract:bump VERSION=<x.y.z>`.
-- `pnpm install` needs registry access (`~/.npmrc` PAT with `read:packages`). While the contract is
-  unreleased, `task contract:link` against a built sibling checkout keeps you moving.
+- `pnpm install` needs registry access: `task registry:login` (reuses your `gh` login, no PAT) or
+  a `~/.npmrc` PAT with `read:packages`; with neither, the **Lockfile** workflow resolves the
+  lockfile in CI. While the contract is unreleased, `task contract:link` against a built sibling
+  checkout keeps you moving.
 
 ## 2. Regenerate
 

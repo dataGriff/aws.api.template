@@ -11,12 +11,20 @@ infrastructure. In order:
 1. **Release the contract.** Merge the contract repo to `main`; its Release workflow publishes
    `@datagriff/todo-api-contract` (first release `1.0.0`). Until a version exists, `pnpm install`
    here cannot resolve the dependency and CI fails at install — expected on a fresh adoption.
-2. **Registry access.** In the contract package's settings, grant this repository _Actions access_
-   (read), or set a `PACKAGES_READ_TOKEN` secret (a PAT with `read:packages`) — the workflows use
-   `PACKAGES_READ_TOKEN || GITHUB_TOKEN`. Developers put
-   `//npm.pkg.github.com/:_authToken=<PAT>` in their `~/.npmrc`.
-3. **Lockfile.** Run `pnpm install` once with registry access and commit `pnpm-lock.yaml` (the
-   entry for the contract package is the only change).
+2. **Registry access.** GitHub Packages has no anonymous reads, even for public packages, so
+   every install presents a token — but nobody has to create one by hand:
+   - **CI** uses the built-in `GITHUB_TOKEN` (a package published from a public repo is readable
+     by any authenticated token; for a private one, grant this repository _Actions access_ in the
+     package's settings). `PACKAGES_READ_TOKEN` (a PAT with `read:packages`) is only the fallback —
+     the workflows use `PACKAGES_READ_TOKEN || GITHUB_TOKEN`.
+   - **Developers** run `task registry:login` once per machine: it reuses the GitHub CLI login
+     (adding the `read:packages` scope) and writes the token line to `~/.npmrc`. Without `gh`,
+     put `//npm.pkg.github.com/:_authToken=<PAT with read:packages>` there yourself.
+3. **Lockfile.** After `task contract:bump` (or on a fresh adoption) `pnpm-lock.yaml` needs the
+   contract entry: run `task deps:lock` locally and commit, or, with no local registry auth,
+   dispatch the **Lockfile** workflow on your branch (Actions → Lockfile → Run workflow). It
+   resolves with `GITHUB_TOKEN` and pushes the commit; because a `GITHUB_TOKEN` push never starts
+   another run, CI picks the lockfile up on your next push to the branch.
 4. **Register the service on the platform.** Add `{ name = "<service_name>", github_repository =
 "<owner>/<repo>" }` to `services` in the platform repo's `terraform/bootstrap/variables.tf` and
    re-run its `task tf:bootstrap`. That creates this API's per-env state backends
