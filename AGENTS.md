@@ -12,8 +12,8 @@ worked example is a multi-tenant Todo app. See `docs/architecture/` for the full
 
 ## Golden rules
 
-- **The contract is the source of truth, and it is a dependency.** The API pins a version of
-  `@datagriff/todo-api-contract` (`packages/api/package.json`). To change the API's surface, change
+- **The contract is the source of truth, and it is a dependency.** The API pins an exact version of
+  `@datagriff/todo-api-contract` (`packages/api/package.json`; bumps are explicit diffs). To change the API's surface, change
   the contract repo, release it, then `task contract:bump VERSION=…` here and run `task gen`. Never
   copy the spec into this repo.
 - **Never edit generated code by hand.** `infra/terraform/modules/api-gateway/openapi.gateway.yaml`

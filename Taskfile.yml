@@ -88,7 +88,9 @@ tasks:
       - sh: test -n "{{.VERSION}}"
         msg: "Pass VERSION=<x.y.z> (a published @datagriff/todo-api-contract version)"
     cmds:
-      - pnpm --filter @app/api add @datagriff/todo-api-contract@{{.VERSION}}
+      # --save-exact: the contract is pinned to one version (the lockfile AND
+      # package.json), so a bump is always an explicit, reviewed diff.
+      - pnpm --filter @app/api add --save-exact @datagriff/todo-api-contract@{{.VERSION}}
   contract:link:
     desc: "Co-development: use a sibling checkout of aws.contract.template (built) instead of the registry. CONTRACT_DIR overrides ../aws.contract.template. Undo with task contract:unlink"
     vars:

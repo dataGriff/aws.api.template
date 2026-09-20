@@ -19,11 +19,16 @@ jobs:
       contents: write # tags, releases, changelog commit
       issues: write
       pull-requests: write
+      packages: read # install @datagriff/todo-api-contract
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with: { fetch-depth: 0 }
       - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3.6.3
         with: { install: true, cache: true }
+      - name: Configure registry auth
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN || secrets.GITHUB_TOKEN }}
+        run: echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" >> "$HOME/.npmrc"
       - run: pnpm install --frozen-lockfile
       # NOTE: @semantic-release/git pushes a changelog commit to main. If main is
       # branch-protected, allow the GITHUB_TOKEN (or a deploy key/app token) to

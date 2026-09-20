@@ -62,7 +62,7 @@ registered / publishes under.
 ## Bumping the contract
 
 ```bash
-task contract:bump VERSION=1.2.0   # pins the published version
+task contract:bump VERSION=1.2.0   # pins the published version exactly (package.json + lockfile)
 task gen                           # re-renders the gateway spec
 task ci                            # route table, handler, contract layer against the new version
 ```

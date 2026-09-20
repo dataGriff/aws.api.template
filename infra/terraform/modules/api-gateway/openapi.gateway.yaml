@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Todo API
-  version: 0.0.0
+  version: 1.0.1
   description: >
     A multi-tenant Todo API — the worked example for the AWS
     API/platform/contract templates.

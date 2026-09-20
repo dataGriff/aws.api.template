@@ -15,7 +15,11 @@ const spec = parse(readFileSync(contractPath, "utf8"));
 const outDir = join(root, "infra/terraform/modules/api-gateway");
 mkdirSync(outDir, { recursive: true });
 
-writeFileSync(join(outDir, "openapi.gateway.yaml"), stringifyGatewaySpec(renderGatewaySpec(spec)));
+const rendered = renderGatewaySpec(spec);
+// The deployed spec advertises the exact package version this API pins (the
+// package's own info.version normally equals it; a linked dev build may not).
+rendered.info.version = contractVersion;
+writeFileSync(join(outDir, "openapi.gateway.yaml"), stringifyGatewaySpec(rendered));
 console.log(
   `Rendered infra/terraform/modules/api-gateway/openapi.gateway.yaml from contract ${contractVersion}`,
 );
