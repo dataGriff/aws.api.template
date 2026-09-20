@@ -38,10 +38,13 @@ jobs:
     env:
       ENV: ${{ github.event.inputs.environment || 'dev' }}
       AWS_REGION: ${{ vars.AWS_REGION || 'eu-west-2' }}
-      TF_DIR: infra/terraform/envs/${{ github.event.inputs.environment || 'dev' }}
-      # No backend config here: `task tf:apply` derives the per-env bucket/lock/KMS
-      # names from service_name + env + account id and passes them to `init`, so CI
-      # and local runs share one code path with no state secrets.
+      # Workflow-only: where the saved plan lands and where `terraform output` is
+      # read for the smoke test (the Taskfile derives its own directories from
+      # ENV). No backend config here: `task tf:apply` derives the per-env
+      # bucket/lock/KMS names from service_name + env + account id and passes
+      # them to `init`, so CI and local runs share one code path with no state
+      # secrets.
+      TF_ENV_DIR: infra/terraform/envs/${{ github.event.inputs.environment || 'dev' }}
     steps:
       - name: Check required configuration
         env:
@@ -52,11 +55,12 @@ jobs:
             exit 1
           fi
 
-      # Checks out main's current head (github.sha for a workflow_run is the
-      # default branch). With the per-env concurrency queue this is always the
-      # newest commit CI has passed or is about to re-validate.
+      # Deploy exactly the commit CI validated: for a workflow_run event github.sha
+      # is the default branch's CURRENT head, which may already be a newer, unvalidated
+      # push. Manual dispatch deploys the selected ref's head (github.sha).
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           persist-credentials: false
       - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3.6.3
         with: { install: true, cache: true }
@@ -93,7 +97,7 @@ jobs:
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: tfplan-${{ env.ENV }}-${{ github.run_id }}
-          path: ${{ env.TF_DIR }}/tfplan
+          path: ${{ env.TF_ENV_DIR }}/tfplan
           if-no-files-found: ignore
           retention-days: 30
 
@@ -117,5 +121,5 @@ jobs:
       - name: Smoke test (health + gateway behaviour)
         if: ${{ env.ENV != 'prod' }}
         run: |
-          URL=$(terraform -chdir="$TF_DIR" output -raw api_invoke_url)
+          URL=$(terraform -chdir="$TF_ENV_DIR" output -raw api_invoke_url)
           task smoke ENV="$ENV" URL="$URL"
