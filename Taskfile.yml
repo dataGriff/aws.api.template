@@ -299,7 +299,9 @@ tasks:
           -backend-config=region="${region}" \
           -backend-config=dynamodb_table="${svc}-tflock-{{.ENV}}" \
           -backend-config=kms_key_id="${key_arn}"
-      - terraform plan -input=false -var-file=terraform.tfvars -out=tfplan
+        # The same name goes to Terraform, so an override can never pair one
+        # service's state backend with another's resources.
+        terraform plan -input=false -var-file=terraform.tfvars -var=service_name="${svc}" -out=tfplan
   tf:apply:
     desc: "Terraform apply for an env (used by CI deploy). Applies the saved plan from tf:plan."
     dir: "{{.TF_DIR}}/envs/{{.ENV}}"
