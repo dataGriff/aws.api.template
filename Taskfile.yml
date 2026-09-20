@@ -284,16 +284,19 @@ tasks:
       # the names the platform bootstrap created when this service was
       # registered (aws.infra.template) — so nothing account-specific is
       # committed and there are no state secrets to set.
+      # The state key's alias is resolved to its ARN: the platform's bucket policy
+      # only accepts writes encrypted with exactly that key.
       - |
         set -euo pipefail
         svc="${SERVICE_NAME:-$(sed -nE 's/^service_name[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' terraform.tfvars)}"
         account="$(aws sts get-caller-identity --query Account --output text)"
         region="${AWS_REGION:-eu-west-2}"
+        key_arn="$(aws kms describe-key --key-id "alias/${svc}-tfstate-{{.ENV}}" --query KeyMetadata.Arn --output text)"
         terraform init -input=false -reconfigure \
           -backend-config=bucket="${svc}-tfstate-{{.ENV}}-${account}" \
           -backend-config=region="${region}" \
           -backend-config=dynamodb_table="${svc}-tflock-{{.ENV}}" \
-          -backend-config=kms_key_id="alias/${svc}-tfstate-{{.ENV}}"
+          -backend-config=kms_key_id="${key_arn}"
       - terraform plan -input=false -var-file=terraform.tfvars -out=tfplan
   tf:apply:
     desc: "Terraform apply for an env (used by CI deploy). Applies the saved plan from tf:plan."

@@ -18,6 +18,7 @@ on:
 permissions:
   id-token: write # OIDC — no long-lived AWS keys
   contents: read
+  checks: read # manual dispatch verifies the commit has a successful CI run
   packages: read # install @datagriff/todo-api-contract
 
 # One apply per environment at a time; never cancel a running apply (that
@@ -52,6 +53,21 @@ jobs:
         run: |
           if [ -z "$AWS_DEPLOY_ROLE_ARN" ]; then
             echo "::error::Missing required secret AWS_DEPLOY_ROLE_ARN — see docs/operations."
+            exit 1
+          fi
+
+      # Manual dispatch may pick any ref; hold it to the same bar as the automatic
+      # path (ADR-11: deploy only what CI validated) by requiring a successful
+      # `ci` check run on that exact commit.
+      - name: Require a successful CI run for this commit (manual dispatch)
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          conclusion="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/check-runs?check_name=ci" \
+            --jq '[.check_runs[] | select(.name == "ci")] | max_by(.completed_at) | .conclusion // ""')"
+          if [ "$conclusion" != "success" ]; then
+            echo "::error::No successful CI run for ${GITHUB_SHA} (found: '${conclusion:-none}'). Deploy only CI-validated commits."
             exit 1
           fi
 
