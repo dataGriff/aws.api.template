@@ -82,6 +82,10 @@ tasks:
     silent: true
     cmds:
       - node scripts/contract-path.mjs --dir
+  deps:lock:
+    desc: "Resolve pnpm-lock.yaml without installing (after task contract:bump). Needs registry auth; the Lockfile workflow runs this in CI with GITHUB_TOKEN when you have none locally."
+    cmds:
+      - pnpm install --lockfile-only
   contract:bump:
     desc: "Pin a new contract version, e.g. task contract:bump VERSION=1.2.0 (then task gen && task ci)"
     preconditions:

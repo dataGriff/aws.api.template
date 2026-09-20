@@ -1,0 +1,64 @@
+name: Lockfile
+
+# Resolves pnpm-lock.yaml with the repository's own GITHUB_TOKEN and pushes the
+# result to the branch you dispatch it on — so nobody needs a personal access
+# token for GitHub Packages just to lock a new contract version (docs/operations
+# "First-time wiring"). Run it after `task contract:bump` (or a fresh adoption)
+# when you cannot `pnpm install` locally.
+#
+# A push made with GITHUB_TOKEN never starts another workflow run, so CI does
+# not re-run on the lockfile commit by itself: it runs on your next push to the
+# branch. The lockfile is the only file this workflow may change.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lockfile-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # push pnpm-lock.yaml to the dispatched branch
+      packages: read # resolve @datagriff/todo-api-contract
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        # Credentials stay so the last step can push; this job runs nothing
+        # from the repo other than the install itself.
+        with:
+          persist-credentials: true
+
+      - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3.6.3
+        with:
+          install: true
+          cache: true
+
+      # Same auth as every other workflow: the package grants this repo Actions
+      # access, PACKAGES_READ_TOKEN is the fallback.
+      - name: Configure registry auth
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN || secrets.GITHUB_TOKEN }}
+        run: echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" >> "$HOME/.npmrc"
+
+      - name: Resolve the lockfile
+        run: task deps:lock
+
+      - name: Commit and push pnpm-lock.yaml if it changed
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- pnpm-lock.yaml; then
+            echo "pnpm-lock.yaml already up to date — nothing to push."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pnpm-lock.yaml
+          git commit -m "chore(deps): resolve pnpm-lock.yaml for the pinned contract package"
+          git push
+          echo "Pushed. CI does not run on a GITHUB_TOKEN push — it runs on your next push to this branch."
