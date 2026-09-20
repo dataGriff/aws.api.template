@@ -58,6 +58,10 @@ jobs:
       # Deploy exactly the commit CI validated: for a workflow_run event github.sha
       # is the default branch's CURRENT head, which may already be a newer, unvalidated
       # push. Manual dispatch deploys the selected ref's head (github.sha).
+      # Semgrep's workflow_run pwn-request rule fires on any checkout of head_sha; here
+      # the job's `if:` above only admits a successful CI run of `main` in THIS repository
+      # (never a fork or PR head), so the checked-out code is always trusted main.
+      # nosemgrep: yaml.github-actions.security.workflow-run-target-code-checkout.workflow-run-target-code-checkout
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
