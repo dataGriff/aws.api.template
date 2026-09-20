@@ -1,1 +1,0 @@
-{"type":"object","required":["status"],"additionalProperties":false,"properties":{"status":{"type":"string","enum":["ok"]},"version":{"type":"string"}},"x-readme-ref-name":"health_status"}

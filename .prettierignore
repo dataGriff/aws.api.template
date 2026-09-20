@@ -1,5 +1,3 @@
-**/generated/**
-docs/api-reference/**
 **/dist/**
 **/coverage/**
 pnpm-lock.yaml

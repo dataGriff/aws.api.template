@@ -1,12 +1,11 @@
-// Consumer-side contract conformance: drive the GENERATED SDK through every
-// operation against the running local server and check each response with the
-// generated zod schemas. This proves both halves of the contract agree —
-// provider responses and consumer client. (Inside the workspace @app/sdk
-// resolves to its source; `task test:contract` also builds the package and
-// loads the published dist entry points so the shipped artifact is checked.)
+// Consumer-side contract conformance: drive the PUBLISHED client (the exact
+// @datagriff/todo-api-contract version this API pins) through every operation
+// against the running local server and check each response with the package's
+// zod schemas. This proves both halves of the contract agree — provider
+// responses and the client consumers install.
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { schemas } from "@app/contracts";
+import { schemas } from "@datagriff/todo-api-contract";
 import {
   ApiError,
   createClient,
@@ -16,7 +15,7 @@ import {
   getTodo,
   listTodos,
   updateTodo,
-} from "@app/sdk";
+} from "@datagriff/todo-api-contract/client";
 
 const parse = <T>(
   schema: { safeParse: (v: unknown) => { success: boolean; error?: unknown; data?: unknown } },

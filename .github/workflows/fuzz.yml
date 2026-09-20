@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: read
+  packages: read # install @datagriff/todo-api-contract
 
 concurrency:
   group: fuzz
@@ -29,6 +30,15 @@ jobs:
           persist-credentials: false
       - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3.6.3
         with: { install: true, cache: true }
+      # The contract package lives on GitHub Packages. A package published from
+      # another repo is readable by this repo's GITHUB_TOKEN only once the
+      # package grants it access (aws.contract.template docs/operations);
+      # PACKAGES_READ_TOKEN (a PAT with read:packages) is the fallback.
+      - name: Configure registry auth
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN || secrets.GITHUB_TOKEN }}
+        run: echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" >> "$HOME/.npmrc"
+
       - run: pnpm install --frozen-lockfile
 
       # Fuzz a deployed stage. API_URL + API_TOKEN (Cognito test user) + API_KEY

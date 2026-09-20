@@ -1,6 +1,6 @@
 # Schemathesis (property-based fuzzing)
 
-Generates requests from `api/openapi.yaml` and asserts the running API never
+Generates requests from the installed contract (`@datagriff/todo-api-contract`, `task contract:path`) and asserts the running API never
 violates its own contract (no unexpected 5xx, responses match declared schemas,
 etc.). This layer explores the **input space** — it does not encode business
 rules (that is the BDD layer's job).
@@ -22,6 +22,7 @@ token minted from a Cognito test user (see `.github/workflows`).
 
 - `SCHEMATHESIS_EXAMPLES` — examples per operation (default 25; raise for depth).
 - `API_URL` — base URL (default `http://localhost:3000/v1`).
+- `SCHEMA` — spec path (default: the installed contract package's `openapi.yaml`).
 - `API_KEY` — sent as `x-api-key` when usage plans are enforced.
 
 Keep it scoped to schema conformance. If an operation needs complex pre-existing

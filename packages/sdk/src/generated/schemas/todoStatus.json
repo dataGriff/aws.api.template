@@ -1,1 +1,0 @@
-{"type":"string","description":"Lifecycle state of a todo","enum":["open","in_progress","done"],"x-readme-ref-name":"todo_status"}

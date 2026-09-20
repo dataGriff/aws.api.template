@@ -1,7 +1,7 @@
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { z } from "zod";
-import { schemas } from "@app/contracts";
-import type { TodoCreate, TodoStatus, TodoUpdate } from "@app/contracts";
+import { schemas } from "@datagriff/todo-api-contract";
+import type { TodoCreate, TodoStatus, TodoUpdate } from "@datagriff/todo-api-contract/types";
 import { extractAuth } from "../auth/claims.js";
 import * as todos from "../domain/todos.js";
 import { createTodoIdempotent } from "../idempotency.js";
@@ -13,7 +13,7 @@ type Handler = (event: APIGatewayProxyEvent) => Promise<APIGatewayProxyResult>;
 const health: Handler = async () =>
   json(200, { status: "ok", version: process.env.SERVICE_VERSION ?? "dev" });
 
-// Query parameter validation mirrors api/openapi.yaml. API Gateway's request
+// Query parameter validation mirrors the contract (@datagriff/todo-api-contract). API Gateway's request
 // validator only checks that required parameters are *present*, so range and
 // type constraints must be enforced here to honour the contract's 400s.
 // .strict(): unknown query parameters are rejected (400), the same stance the
@@ -93,7 +93,7 @@ const deleteTodo: Handler = async (event) => {
 };
 
 // Keyed by "<METHOD> <resource>" where resource is the API Gateway path
-// template. Must match the operations in api/openapi.yaml exactly — a unit
+// template. Must match the operations in the installed contract exactly — a unit
 // test (test/unit/routes-contract.test.ts) fails the build on drift.
 export const routes: Readonly<Record<string, Handler>> = {
   "GET /health": health,

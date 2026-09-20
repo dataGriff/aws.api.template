@@ -1,9 +1,10 @@
 openapi: 3.0.3
 info:
   title: Todo API
-  version: 1.0.0
+  version: 1.0.1
   description: >
-    A multi-tenant Todo API — the worked example for the AWS API template.
+    A multi-tenant Todo API — the worked example for the AWS
+    API/platform/contract templates.
 
 
     Every request is authenticated with a Cognito-issued JWT. Todos are scoped
@@ -12,19 +13,22 @@ info:
     tenant and user (from the token's `sub` and `custom:tenant_id` claims); the
     API never accepts a
 
-    client-supplied owner. This contract is the single source of truth: server
-    types, gateway
+    client-supplied owner. This contract is the single source of truth: it is
+    published as the
 
-    request validation, the consumer SDK, the mock server, the `.http`
-    collection, and the reference
+    `@datagriff/todo-api-contract` package (types, zod schemas, a typed client,
+    this spec and an
 
-    docs are all generated from it.
+    `.http` collection), and the provider's gateway validation, mock server and
+    reference docs are
+
+    all generated from it. `info.version` is the published package version.
   contact:
     name: API Platform
-    url: https://github.com/dataGriff/aws.api.template
+    url: https://github.com/dataGriff/aws.contract.template
   license:
     name: MIT
-    url: https://github.com/dataGriff/aws.api.template/blob/main/LICENSE
+    url: https://github.com/dataGriff/aws.contract.template/blob/main/LICENSE
 servers:
   - url: https://api.example.com/v1
     description: Production (replace with your custom domain)
@@ -409,6 +413,55 @@ components:
       schema:
         type: string
   schemas:
+    access_token_claims:
+      type: object
+      description: >
+        The claims of a `cognito_jwt` access token the API relies on. Not a
+        request or
+
+        response body: it documents (and, through the generated zod schema, lets
+        the provider
+
+        and consumers validate) what a usable token carries. The platform's
+        pre-token trigger
+
+        adds the custom claims; standard Cognito claims (`iss`, `exp`,
+        `token_use`, ...) are
+
+        verified by the gateway and omitted here.
+      required:
+        - sub
+        - custom:tenant_id
+      properties:
+        sub:
+          type: string
+          description: The user's stable Cognito identifier; scopes every resource to its
+            owner.
+          example: 6b2f7c3e-1a0f-4f1c-9a4c-2d1c0e8b7a55
+        custom:tenant_id:
+          type: string
+          minLength: 1
+          maxLength: 256
+          description: The user's tenant; every query is scoped to it. Sourced from the
+            user's `custom:tenant_id` attribute.
+          example: acme
+        roles:
+          type: string
+          description: >
+            The user's Cognito group names as a JSON-encoded array of strings
+            (encoded so names
+
+            with separators survive the authorizer's flattening). `admin` grants
+            cross-user
+
+            operations. Absent when the user is in no group.
+          example: '["admin"]'
+        cognito:groups:
+          type: array
+          items:
+            type: string
+          description: The raw Cognito group claim, when the pool includes it; equivalent
+            to `roles`.
     health_status:
       type: object
       required:
@@ -563,7 +616,14 @@ components:
           schema:
             $ref: "#/components/schemas/problem"
     unauthorized:
-      description: Missing or invalid credentials
+      description: >
+        Missing or invalid credentials — no bearer token, a token the authorizer
+        rejects
+
+        (signature, issuer, expiry), or a valid token lacking the claims the API
+        requires
+
+        (see `access_token_claims`).
       content:
         application/problem+json:
           schema:

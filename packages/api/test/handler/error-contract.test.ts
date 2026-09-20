@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { schemas } from "@app/contracts";
+import { schemas } from "@datagriff/todo-api-contract";
 import { invoke, parse } from "../helpers/invoke.js";
 
 // These paths fail before any DB access, so they run without a container and

@@ -23,7 +23,7 @@ crash.log
 .env.*
 !.env.example
 *.pem
-# Tokens for the .http collection (written by `task token`); never commit
+# Tokens for the .http collections (written by `task token`); never commit
 collections/http-client.private.env.json
 
 # Artifacts

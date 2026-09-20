@@ -1,11 +1,8 @@
-# Plan-time tests of the stack's guardrails. Providers are mocked, so this runs
-# without credentials or network (terraform test, in `task tf:test`).
+# Plan-time tests of the stack's guardrails and sizing rules, and of how it
+# consumes the platform interface. Providers are mocked, so this runs without
+# credentials or network (terraform test, in `task tf:test`).
 
 mock_provider "aws" {
-  override_data {
-    target = data.aws_availability_zones.available
-    values = { names = ["eu-west-2a", "eu-west-2b", "eu-west-2c"] }
-  }
   # The provider validates policy JSON at plan time; a mocked random string fails.
   mock_data "aws_iam_policy_document" {
     defaults = { json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}" }
@@ -16,72 +13,65 @@ mock_provider "aws" {
   mock_data "aws_partition" {
     defaults = { partition = "aws", dns_suffix = "amazonaws.com" }
   }
+  # The platform interface: every parameter reads as a syntactically valid ARN
+  # unless a run overrides it (the ones with structure are overridden below).
+  mock_data "aws_ssm_parameter" {
+    defaults = { value = "arn:aws:mock:eu-west-2:123456789012:mock" }
+  }
+  override_data {
+    target = module.platform.data.aws_ssm_parameter.required["interface/version"]
+    values = { value = "1" }
+  }
+  override_data {
+    target = module.platform.data.aws_ssm_parameter.required["alarms/topic_arn"]
+    values = { value = "arn:aws:sns:eu-west-2:123456789012:platform-dev-alarms" }
+  }
+  override_data {
+    target = module.platform.data.aws_ssm_parameter.required["network/vpc_id"]
+    values = { value = "vpc-0123456789abcdef0" }
+  }
+  override_data {
+    target = module.platform.data.aws_ssm_parameter.required["network/private_subnet_ids"]
+    values = { value = "subnet-aaa,subnet-bbb" }
+  }
+  override_data {
+    target = module.platform.data.aws_ssm_parameter.required["network/vpc_cidr"]
+    values = { value = "10.0.0.0/16" }
+  }
+  override_data {
+    target = module.platform.data.aws_ssm_parameter.required["network/nat_enabled"]
+    values = { value = "false" }
+  }
 }
-mock_provider "random" {}
 mock_provider "archive" {}
 
 variables {
-  service_name      = "todo-api"
-  region            = "eu-west-2"
-  api_dist_dir      = "../../../packages/api/dist"
-  pretoken_dist_dir = "../../../packages/cognito-pretoken/dist"
+  service_name = "todo-api"
+  region       = "eu-west-2"
+  api_dist_dir = "../../../packages/api/dist"
 }
 
 # --- prod refuses unsafe inputs ----------------------------------------------
-run "prod_refuses_missing_alarm_email" {
-  command = plan
-  variables {
-    env                 = "prod"
-    deletion_protection = true
-    db_multi_az         = true
-    cors_origin         = "https://app.example.com"
-    callback_urls       = ["https://app.example.com/callback"]
-    logout_urls         = ["https://app.example.com/"]
-  }
-  expect_failures = [var.alarm_email]
-}
-
 run "prod_refuses_wildcard_cors" {
   command = plan
   variables {
     env                 = "prod"
     deletion_protection = true
     db_multi_az         = true
-    alarm_email         = "ops@example.com"
     cors_origin         = "*"
-    callback_urls       = ["https://app.example.com/callback"]
-    logout_urls         = ["https://app.example.com/"]
   }
   expect_failures = [var.cors_origin]
 }
 
-run "prod_refuses_localhost_callbacks" {
-  command = plan
-  variables {
-    env                 = "prod"
-    deletion_protection = true
-    db_multi_az         = true
-    alarm_email         = "ops@example.com"
-    cors_origin         = "https://app.example.com"
-    callback_urls       = ["http://localhost:3000/callback"]
-    logout_urls         = ["https://app.example.com/"]
-  }
-  expect_failures = [var.callback_urls]
-}
-
-run "prod_refuses_single_az_and_test_client" {
+run "prod_refuses_single_az" {
   command = plan
   variables {
     env                 = "prod"
     deletion_protection = true
     db_multi_az         = false
-    enable_test_client  = true
-    alarm_email         = "ops@example.com"
     cors_origin         = "https://app.example.com"
-    callback_urls       = ["https://app.example.com/callback"]
-    logout_urls         = ["https://app.example.com/"]
   }
-  expect_failures = [var.db_multi_az, var.enable_test_client]
+  expect_failures = [var.db_multi_az]
 }
 
 run "prod_refuses_without_deletion_protection" {
@@ -90,27 +80,36 @@ run "prod_refuses_without_deletion_protection" {
     env                 = "prod"
     deletion_protection = false
     db_multi_az         = true
-    alarm_email         = "ops@example.com"
     cors_origin         = "https://app.example.com"
-    callback_urls       = ["https://app.example.com/callback"]
-    logout_urls         = ["https://app.example.com/"]
   }
   expect_failures = [var.deletion_protection]
+}
+
+# --- the platform interface version is enforced ----------------------------------
+run "refuses_other_interface_version" {
+  command = plan
+  variables {
+    env                        = "dev"
+    platform_interface_version = "2"
+  }
+  expect_failures = [terraform_data.platform_interface]
 }
 
 # --- a hardened prod plans, with the protections actually in the plan ---------
 run "prod_hardened" {
   command = plan
   variables {
-    env                 = "prod"
-    deletion_protection = true
-    db_multi_az         = true
-    db_instance_class   = "db.t4g.medium"
-    alarm_email         = "ops@example.com"
-    cors_origin         = "https://app.example.com"
-    callback_urls       = ["https://app.example.com/callback"]
-    logout_urls         = ["https://app.example.com/"]
-    enable_waf          = true
+    env                   = "prod"
+    deletion_protection   = true
+    db_multi_az           = true
+    db_instance_class     = "db.t4g.medium"
+    cors_origin           = "https://app.example.com"
+    enable_waf            = true
+    custom_domain_enabled = true
+  }
+  override_data {
+    target = module.platform.data.aws_ssm_parameter.optional["dns/base_domain"]
+    values = { value = "example.com" }
   }
   assert {
     condition     = module.database.multi_az == true
@@ -129,20 +128,12 @@ run "prod_hardened" {
     error_message = "server-side TLS enforcement parameter group missing"
   }
   assert {
-    condition     = module.cognito.deletion_protection == "ACTIVE"
-    error_message = "prod user pool must carry deletion protection"
+    condition     = length(module.waf_association) == 1
+    error_message = "the stage must attach to the platform WAF when enable_waf is true"
   }
   assert {
-    condition     = module.cognito.prevent_user_existence_errors == "ENABLED"
-    error_message = "app client must not leak user existence"
-  }
-  assert {
-    condition     = module.cognito.test_client_enabled == false
-    error_message = "no password-auth test client in prod"
-  }
-  assert {
-    condition     = length(module.waf) == 1
-    error_message = "WAF must be attached when enable_waf is true"
+    condition     = module.custom_domain[0].domain_name == "todo-api.example.com"
+    error_message = "the hostname must be <service_name>.<platform base_domain>"
   }
 }
 
@@ -162,26 +153,33 @@ run "dev_defaults" {
   }
   assert {
     condition     = length([for r in aws_security_group.lambda.egress : r if contains(coalesce(r.cidr_blocks, []), "0.0.0.0/0")]) == 0
-    error_message = "lambda egress must stay VPC-internal without the static-egress opt-in"
+    error_message = "lambda egress must stay VPC-internal while the platform has no NAT"
   }
   assert {
-    condition     = length(module.waf) == 0
-    error_message = "WAF is opt-in"
+    condition     = length(module.waf_association) == 0 && length(module.custom_domain) == 0
+    error_message = "WAF association and custom domain are opt-in"
+  }
+  assert {
+    condition     = module.platform.private_subnet_ids == tolist(["subnet-aaa", "subnet-bbb"])
+    error_message = "the StringList parameter must be split into subnet ids"
+  }
+  assert {
+    condition     = module.lambda_api.role_permissions_boundary == "arn:aws:iam::123456789012:policy/todo-api-dev-workload-boundary" && module.rds_proxy[0].role_permissions_boundary == "arn:aws:iam::123456789012:policy/todo-api-dev-workload-boundary"
+    error_message = "every role this stack creates must carry the platform-issued workload boundary <service>-<env>-workload-boundary"
   }
 }
 
-run "static_egress_opens_nat_route" {
+run "platform_nat_opens_egress" {
   command = plan
   variables {
-    env                     = "dev"
-    enable_egress_static_ip = true
+    env = "dev"
+  }
+  override_data {
+    target = module.platform.data.aws_ssm_parameter.required["network/nat_enabled"]
+    values = { value = "true" }
   }
   assert {
     condition     = length([for r in aws_security_group.lambda.egress : r if contains(coalesce(r.cidr_blocks, []), "0.0.0.0/0")]) == 1
-    error_message = "the NAT opt-in must add exactly one 0.0.0.0/0 egress rule"
-  }
-  assert {
-    condition     = module.network.nat_enabled == true
-    error_message = "the NAT gateway must exist when static egress is enabled"
+    error_message = "the platform's NAT must add exactly one 0.0.0.0/0 egress rule"
   }
 }

@@ -1,4 +1,5 @@
 import type { APIGatewayProxyEvent } from "aws-lambda";
+import { schemas } from "@datagriff/todo-api-contract";
 import { UnauthorizedError } from "../errors.js";
 
 // The trusted identity for a request, derived solely from validated token
@@ -39,19 +40,22 @@ function parseGroups(value: unknown): string[] {
 }
 
 // API Gateway's Cognito authorizer exposes validated claims here. The token
-// signature/expiry are already verified by the gateway, so we only read.
+// signature/expiry are already verified by the gateway, so we only read — and
+// require the claims the contract declares (access_token_claims): the same
+// schema consumers see, and the shape the platform's pre-token trigger issues.
+// cognito:groups arrives flattened to a string through the authorizer, so it is
+// read leniently rather than through the schema's array type.
 export function extractAuth(event: APIGatewayProxyEvent): AuthContext {
-  const claims = event.requestContext.authorizer?.claims as Record<string, unknown> | undefined;
+  const { "cognito:groups": rawGroups, ...claims } = (event.requestContext.authorizer?.claims ??
+    {}) as Record<string, unknown>;
 
-  const userSub = claims?.sub;
-  const tenantId = claims?.["custom:tenant_id"];
-  if (typeof userSub !== "string" || typeof tenantId !== "string") {
+  const parsed = schemas.accessTokenClaimsSchema.safeParse(claims);
+  if (!parsed.success) {
     throw new UnauthorizedError("Token is missing required claims");
   }
+  const { sub: userSub, "custom:tenant_id": tenantId, roles } = parsed.data;
 
-  const groups = [
-    ...new Set([...parseGroups(claims?.["cognito:groups"]), ...parseGroups(claims?.["roles"])]),
-  ];
+  const groups = [...new Set([...parseGroups(rawGroups), ...parseGroups(roles)])];
 
   return { userSub, tenantId, groups };
 }

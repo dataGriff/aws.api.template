@@ -24,13 +24,11 @@ tasks:
   # Aggregate gates
   # ---------------------------------------------------------------------------
   check:
-    desc: "Fast pre-commit gate: format, lint, typecheck, spec lint, contract compat, gen-drift, secrets, unit"
+    desc: "Fast pre-commit gate: format, lint, typecheck, gen-drift, secrets, unit"
     cmds:
       - task: format:check
       - task: lint
       - task: typecheck
-      - task: spec:lint
-      - task: contract:compat
       - task: gen:check
       - task: security:secrets
       - task: test:unit
@@ -72,27 +70,84 @@ tasks:
       - pnpm build
 
   # ---------------------------------------------------------------------------
-  # Contract & codegen
+  # Contract (the installed @datagriff/todo-api-contract package) & codegen
   # ---------------------------------------------------------------------------
-  spec:lint:
-    desc: Lint the OpenAPI contract (spectral rules incl. snake_case)
+  contract:path:
+    desc: Print the installed contract's absolute path (openapi.yaml)
+    silent: true
     cmds:
-      - redocly lint api/openapi.yaml
-  contract:compat:
-    desc: "Fail on BREAKING contract changes vs the base branch (oasdiff); CONTRACT_BASE_REF overrides the base"
+      - node scripts/contract-path.mjs
+  contract:dir:
+    desc: Print the installed contract package's directory (collections/ lives under it)
+    silent: true
     cmds:
-      - ./scripts/contract-compat.sh
+      - node scripts/contract-path.mjs --dir
+  registry:login:
+    desc: "Registry auth for the contract package WITHOUT a PAT: reuse your GitHub CLI login (adds the read:packages scope) and write the token line to ~/.npmrc. Once per machine."
+    preconditions:
+      - sh: command -v gh
+        msg: "GitHub CLI not found (https://cli.github.com). Alternative: put `//npm.pkg.github.com/:_authToken=<PAT with read:packages>` in ~/.npmrc yourself."
+      - sh: gh auth status --hostname github.com
+        msg: "Not logged in to github.com — run `gh auth login` first."
+    cmds:
+      # The default gh scopes do not include read:packages; refresh adds it
+      # (interactive, once). The token is written only to the user-level npmrc,
+      # never anywhere under the repo, and is never echoed.
+      - |
+        set -euo pipefail
+        if ! gh auth status --hostname github.com 2>&1 | grep -q "read:packages"; then
+          gh auth refresh --hostname github.com --scopes read:packages
+        fi
+        token="$(gh auth token --hostname github.com)"
+        npmrc="$HOME/.npmrc"
+        touch "$npmrc" && chmod 600 "$npmrc"
+        line="//npm.pkg.github.com/:_authToken=$token"
+        if grep -q '^//npm.pkg.github.com/:_authToken=' "$npmrc"; then
+          # replace the existing line (sed -i.bak works on both BSD and GNU sed)
+          sed -i.bak "s#^//npm.pkg.github.com/:_authToken=.*#$line#" "$npmrc" && rm -f "$npmrc.bak"
+        else
+          printf '%s\n' "$line" >> "$npmrc"
+        fi
+        echo "~/.npmrc now authenticates npm.pkg.github.com with your gh login — pnpm install will resolve the contract package."
+  deps:lock:
+    desc: "Resolve pnpm-lock.yaml without installing (after task contract:bump). Needs registry auth; the Lockfile workflow runs this in CI with GITHUB_TOKEN when you have none locally."
+    cmds:
+      - pnpm install --lockfile-only
+  contract:bump:
+    desc: "Pin a new contract version, e.g. task contract:bump VERSION=1.2.0 (then task gen && task ci)"
+    preconditions:
+      - sh: test -n "{{.VERSION}}"
+        msg: "Pass VERSION=<x.y.z> (a published @datagriff/todo-api-contract version)"
+    cmds:
+      # --save-exact: the contract is pinned to one version (the lockfile AND
+      # package.json), so a bump is always an explicit, reviewed diff.
+      - pnpm --filter @app/api add --save-exact @datagriff/todo-api-contract@{{.VERSION}}
+  contract:link:
+    desc: "Co-development: use a sibling checkout of aws.contract.template (built) instead of the registry. CONTRACT_DIR overrides ../aws.contract.template. Undo with task contract:unlink"
+    vars:
+      CONTRACT_DIR: '{{.CONTRACT_DIR | default "../aws.contract.template"}}'
+    preconditions:
+      - sh: test -f {{.CONTRACT_DIR}}/dist/index.js
+        msg: "No built package at {{.CONTRACT_DIR}} — run `task build` there first."
+    dir: packages/api
+    cmds:
+      # `pnpm link` is per package (no --filter) and leaves package.json alone, but
+      # it records a machine-specific `link:` path in the lockfile — restore it so
+      # the link can never be committed.
+      - pnpm link "$(cd ../.. && realpath {{.CONTRACT_DIR}})"
+      - git -C ../.. checkout -- pnpm-lock.yaml
+  contract:unlink:
+    desc: Back to the registry version of the contract package
+    dir: packages/api
+    cmds:
+      - pnpm unlink @datagriff/todo-api-contract
+      - pnpm install
   gen:
-    desc: "Regenerate everything from the contract (contracts, SDK, mock cfg, docs, .http)"
+    desc: "Regenerate everything derived from the contract here: the API Gateway spec (AWS extensions)"
     cmds:
-      - task: spec:lint
-      - pnpm --filter @app/contracts gen
-      - pnpm --filter @app/sdk gen
-      - task: gen:httpfiles
       - task: gen:gateway
-      - task: docs:api
   gen:gateway:
-    desc: Render the API Gateway spec (AWS extensions) from the contract
+    desc: Render the API Gateway spec (AWS extensions) from the installed contract
     cmds:
       - node scripts/render-gateway-spec.mjs
   gen:check:
@@ -100,7 +155,7 @@ tasks:
     vars:
       # Every path `task gen` writes. `git status --porcelain` (not `git diff`)
       # so brand-new untracked files count as drift too.
-      GEN_PATHS: packages/contracts/src/generated packages/sdk/src/generated collections docs/api-reference infra/terraform/modules/api-gateway/openapi.gateway.yaml
+      GEN_PATHS: infra/terraform/modules/api-gateway/openapi.gateway.yaml
     cmds:
       - task: gen
       - |
@@ -110,14 +165,12 @@ tasks:
           echo "$drift"
           exit 1
         fi
-  gen:httpfiles:
-    desc: Generate the .http request collection from the contract
+  http:
+    desc: "Send one of the contract's .http collections locally, e.g. task http FILE=todos (stub token minted on the fly)"
+    vars:
+      FILE: '{{.FILE | default "todos"}}'
     cmds:
-      - node scripts/gen-http-collection.mjs
-  docs:api:
-    desc: Build the static API reference site from the contract
-    cmds:
-      - redocly build-docs api/openapi.yaml -o docs/api-reference/index.html
+      - httpyac send "$(node scripts/contract-path.mjs --dir)/collections/{{.FILE}}.http" --all --env local --var token="$(node scripts/mint-token.mjs --print)" --var apiKey=local-dev-key
 
   # ---------------------------------------------------------------------------
   # Tests (layers kept distinct — see docs/testing)
@@ -142,16 +195,10 @@ tasks:
     cmds:
       - pnpm --filter @app/api test:bdd
   test:contract:
-    desc: "Contract tests over real HTTP against local/server.ts + throwaway Postgres (Docker): Schemathesis provider conformance, generated-SDK consumer conformance, .http collection replay"
+    desc: "Contract tests over real HTTP against local/server.ts + throwaway Postgres (Docker): Schemathesis provider conformance, published-client consumer conformance, .http collection replay — all from the pinned @datagriff/todo-api-contract"
     cmds:
-      # Inside the workspace @app/sdk resolves to its source (publishConfig
-      # switches to dist on publish), so build the package and load BOTH
-      # published entry points once to prove the shipped artifact is importable.
-      - pnpm --filter @app/sdk build
-      - node -e "import('./packages/sdk/dist/index.js').then(m => { if (typeof m.createClient !== 'function') throw new Error('ESM build lacks createClient') })"
-      - node -e "const m = require('./packages/sdk/dist/index.cjs'); if (typeof m.createClient !== 'function') throw new Error('CJS build lacks createClient')"
       # Orchestrated by packages/api/test/contract/run.ts: container, migrations,
-      # server on a free loopback port, stub token, schemathesis, SDK, httpyac, teardown.
+      # server on a free loopback port, stub token, schemathesis, client, httpyac, teardown.
       - pnpm --filter @app/api test:contract
   test:fuzz:
     desc: "Property-based fuzzing (Schemathesis) against a DEPLOYED stage — nightly / on-spec-change"
@@ -162,7 +209,7 @@ tasks:
   # Local dev
   # ---------------------------------------------------------------------------
   up:
-    desc: Start the local stack (Postgres, cognito-local, Prism mock, API)
+    desc: Start the local stack (Postgres, cognito-local)
     cmds:
       - docker compose -f local/docker-compose.yml up -d --wait
       - task: db:migrate
@@ -235,19 +282,19 @@ tasks:
     cmds:
       - terraform -chdir={{.TF_DIR}}/envs/{{.ENV}} fmt -recursive ../../
   tf:validate:
-    desc: Terraform fmt-check + validate (every env + bootstrap) + tflint (recursive)
+    desc: Terraform fmt-check + validate (every env) + tflint (recursive)
     cmds:
       - terraform -chdir={{.TF_DIR}} fmt -check -recursive
       - for: { var: TF_ROOTS }
         cmd: terraform -chdir={{.TF_DIR}}/{{.ITEM}} init -backend=false -input=false >/dev/null && terraform -chdir={{.TF_DIR}}/{{.ITEM}} validate
-      # --recursive: infra/terraform itself holds no .tf files, only modules/, stack/, envs/, bootstrap/.
+      # --recursive: infra/terraform itself holds no .tf files, only modules/, stack/, envs/.
       - tflint --chdir={{.TF_DIR}} --init
       - tflint --chdir={{.TF_DIR}} --recursive
       - task: tf:test
     vars:
-      TF_ROOTS: envs/dev envs/staging envs/prod bootstrap
+      TF_ROOTS: envs/dev envs/staging envs/prod
   tf:test:
-    desc: "terraform test of the stack's guardrails and sizing rules (mocked providers, no credentials)"
+    desc: "terraform test of the stack's guardrails, sizing rules and platform-interface consumption (mocked providers, no credentials)"
     cmds:
       - terraform -chdir={{.TF_DIR}}/stack init -backend=false -input=false >/dev/null
       - terraform -chdir={{.TF_DIR}}/stack test
@@ -261,38 +308,31 @@ tasks:
       # the failed checks are also rendered as a Markdown table in the job summary.
       - mkdir -p test-results
       - checkov -d {{.TF_DIR}} --config-file .checkov.yaml -o cli -o github_failed_only --output-file-path console,test-results/checkov-failed.md
-  tf:bootstrap:
-    desc: "One-time: create per-env TF state backends (bucket+lock+KMS) + GitHub OIDC deploy roles. SERVICE_NAME defaults to todo-api; GITHUB_REPOSITORY=<owner/repo> required. Needs local admin AWS creds. See docs/operations."
-    dir: "{{.TF_DIR}}/bootstrap"
-    preconditions:
-      - sh: test -n "$GITHUB_REPOSITORY"
-        msg: "Set GITHUB_REPOSITORY=<owner/repo> so the OIDC trust is scoped to your repo (default is the template's own repo)."
-    cmds:
-      # Local backend — this run CREATES the per-env remote backends the envs use.
-      - terraform init -input=false
-      - terraform apply -input=false -var=service_name="${SERVICE_NAME:-todo-api}" -var=github_repository="$GITHUB_REPOSITORY"
-      # Prints the derived bucket/lock/alias names + deploy_role_arns. Only
-      # AWS_DEPLOY_ROLE_ARN (per env) needs setting as a GitHub secret.
-      - terraform output
-
   tf:plan:
     desc: "Terraform plan for an env, e.g. task tf:plan ENV=dev (backend names derived from service_name+env+account; needs AWS creds)"
     dir: "{{.TF_DIR}}/envs/{{.ENV}}"
     cmds:
       # Backend names are derived from the env's service_name (read from
-      # terraform.tfvars, or SERVICE_NAME override) + env + account id, so nothing
-      # account-specific is committed and there are no state secrets to set.
+      # terraform.tfvars, or SERVICE_NAME override) + env + account id — exactly
+      # the names the platform bootstrap created when this service was
+      # registered (aws.infra.template) — so nothing account-specific is
+      # committed and there are no state secrets to set.
+      # The state key's alias is resolved to its ARN: the platform's bucket policy
+      # only accepts writes encrypted with exactly that key.
       - |
         set -euo pipefail
         svc="${SERVICE_NAME:-$(sed -nE 's/^service_name[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' terraform.tfvars)}"
         account="$(aws sts get-caller-identity --query Account --output text)"
         region="${AWS_REGION:-eu-west-2}"
+        key_arn="$(aws kms describe-key --key-id "alias/${svc}-tfstate-{{.ENV}}" --query KeyMetadata.Arn --output text)"
         terraform init -input=false -reconfigure \
           -backend-config=bucket="${svc}-tfstate-{{.ENV}}-${account}" \
           -backend-config=region="${region}" \
           -backend-config=dynamodb_table="${svc}-tflock-{{.ENV}}" \
-          -backend-config=kms_key_id="alias/${svc}-tfstate-{{.ENV}}"
-      - terraform plan -input=false -var-file=terraform.tfvars -out=tfplan
+          -backend-config=kms_key_id="${key_arn}"
+        # The same name goes to Terraform, so an override can never pair one
+        # service's state backend with another's resources.
+        terraform plan -input=false -var-file=terraform.tfvars -var=service_name="${svc}" -out=tfplan
   tf:apply:
     desc: "Terraform apply for an env (used by CI deploy). Applies the saved plan from tf:plan."
     dir: "{{.TF_DIR}}/envs/{{.ENV}}"
@@ -318,7 +358,7 @@ tasks:
       # The stage's API key value is only readable through the API (the output exposes the id).
       - |
         API_KEY="$(aws apigateway get-api-key --api-key "$(terraform output -raw api_key_id)" --include-value --query value --output text)"
-        httpyac send ../../../../collections/health.http ../../../../collections/gateway.http --all --var baseUrl={{.URL}} --var apiKey="$API_KEY"
+        httpyac send "$(node ../../../../scripts/contract-path.mjs --dir)/collections/health.http" ../../../../collections/gateway.http --all --var baseUrl={{.URL}} --var apiKey="$API_KEY"
 
   # ---------------------------------------------------------------------------
   # Release
@@ -327,13 +367,6 @@ tasks:
     desc: Run semantic-release (changelog, tag, GitHub release) — pinned via the root devDependencies/lockfile
     cmds:
       - pnpm exec semantic-release -e ./.releaserc.json
-  sdk:publish:
-    desc: "Build and publish the consumer SDK at VERSION=<x.y.z>"
-    cmds:
-      - pnpm --filter @app/sdk exec npm version {{.VERSION}} --no-git-tag-version
-      - task: gen
-      - pnpm --filter @app/sdk build
-      - pnpm --filter @app/sdk publish --no-git-checks
 
   # ---------------------------------------------------------------------------
   # Cost

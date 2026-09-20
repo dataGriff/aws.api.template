@@ -15,13 +15,9 @@ tflint = "0.64.0"
 trivy = "0.74.0"
 gitleaks = "8.30.1"
 infracost = "0.10.45"
-"ubi:oasdiff/oasdiff" = "1.32.1" # contract backward-compatibility gate (task contract:compat)
 lefthook = "2.1.14"
-# Redocly held on 1.x: v2 changed the config schema (redocly.yaml) and the
-# rendered docs output, which would break lint rules and the gen drift-gate.
-"npm:@redocly/cli" = "1.34.5"
-"npm:@stoplight/prism-cli" = "5.16.0"
-"npm:httpyac" = "6.16.7"
+# Contract linting, compat, docs and the Prism mock live in aws.contract.template.
+"npm:httpyac" = "6.16.7" # replays the contract package's .http collection (contract layer, smoke)
 # Schemathesis held on 3.x to match the CLI flags in scripts/schemathesis.sh.
 "pipx:schemathesis" = "3.39.16"
 "pipx:checkov" = "3.3.19"

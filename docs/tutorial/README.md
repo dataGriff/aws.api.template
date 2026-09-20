@@ -9,10 +9,10 @@ into your tracker to replicate the build; each ticket's acceptance criteria are 
 See [backlog.md](backlog.md) for the full ticket list. Epics:
 
 1. Foundations & DX
-2. Contract & codegen
+2. Consume the contract package
 3. Lambda service
-4. Terraform
+4. Terraform: the API stack on the platform
 5. Tests
 6. Local dev
 7. CI/CD & extras
-8. Docs & adopt-contract skill
+8. Docs & adopt-api skill

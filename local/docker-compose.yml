@@ -27,15 +27,9 @@ services:
     volumes:
       - ./cognito-local:/app/.cognito
 
-  # Prism serves the contract as a mock — useful for consumer onboarding and as
-  # an early contract oracle before the real API is deployed.
-  prism:
-    image: stoplight/prism:5
-    command: ["mock", "-h", "0.0.0.0", "/openapi.yaml"]
-    ports:
-      - "4010:4010"
-    volumes:
-      - ../api/openapi.yaml:/openapi.yaml:ro
+  # No mock here: the contract package ships the spec, so a consumer mock is
+  #   npx @stoplight/prism-cli mock "$(task -s contract:path)"
+  # (or `task mock` in aws.contract.template).
 
 volumes:
   pgdata:

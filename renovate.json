@@ -10,6 +10,13 @@
   "minimumReleaseAge": "7 days",
   "packageRules": [
     {
+      "description": "The contract package is the API's public surface: never auto-merge, label it, and keep it out of the non-major group so a bump is reviewed on its own. Renovate needs a hostRule for npm.pkg.github.com (token with read:packages) to see new versions.",
+      "matchPackageNames": ["@datagriff/todo-api-contract"],
+      "groupName": "contract",
+      "labels": ["dependencies", "contract"],
+      "automerge": false
+    },
+    {
       "description": "Auto-merge dev tooling only. Runtime dependencies of the Lambda always get a human review: main auto-deploys, so an auto-merged compromised package would ship itself.",
       "matchManagers": ["npm"],
       "matchDepTypes": ["devDependencies"],
@@ -22,5 +29,7 @@
       "groupName": "mise tools"
     }
   ],
-  "lockFileMaintenance": { "enabled": true }
+  "lockFileMaintenance": {
+    "enabled": true
+  }
 }

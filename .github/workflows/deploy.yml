@@ -18,6 +18,8 @@ on:
 permissions:
   id-token: write # OIDC — no long-lived AWS keys
   contents: read
+  checks: read # manual dispatch verifies the commit has a successful CI run
+  packages: read # install @datagriff/todo-api-contract
 
 # One apply per environment at a time; never cancel a running apply (that
 # orphans state), queue behind it instead.
@@ -37,10 +39,13 @@ jobs:
     env:
       ENV: ${{ github.event.inputs.environment || 'dev' }}
       AWS_REGION: ${{ vars.AWS_REGION || 'eu-west-2' }}
-      TF_DIR: infra/terraform/envs/${{ github.event.inputs.environment || 'dev' }}
-      # No backend config here: `task tf:apply` derives the per-env bucket/lock/KMS
-      # names from service_name + env + account id and passes them to `init`, so CI
-      # and local runs share one code path with no state secrets.
+      # Workflow-only: where the saved plan lands and where `terraform output` is
+      # read for the smoke test (the Taskfile derives its own directories from
+      # ENV). No backend config here: `task tf:apply` derives the per-env
+      # bucket/lock/KMS names from service_name + env + account id and passes
+      # them to `init`, so CI and local runs share one code path with no state
+      # secrets.
+      TF_ENV_DIR: infra/terraform/envs/${{ github.event.inputs.environment || 'dev' }}
     steps:
       - name: Check required configuration
         env:
@@ -51,19 +56,48 @@ jobs:
             exit 1
           fi
 
-      # Checks out main's current head (github.sha for a workflow_run is the
-      # default branch). With the per-env concurrency queue this is always the
-      # newest commit CI has passed or is about to re-validate.
+      # Manual dispatch may pick any ref; hold it to the same bar as the automatic
+      # path (ADR-11: deploy only what CI validated) by requiring a successful
+      # `ci` check run on that exact commit.
+      - name: Require a successful CI run for this commit (manual dispatch)
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          conclusion="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/check-runs?check_name=ci" \
+            --jq '[.check_runs[] | select(.name == "ci")] | max_by(.completed_at) | .conclusion // ""')"
+          if [ "$conclusion" != "success" ]; then
+            echo "::error::No successful CI run for ${GITHUB_SHA} (found: '${conclusion:-none}'). Deploy only CI-validated commits."
+            exit 1
+          fi
+
+      # Deploy exactly the commit CI validated: for a workflow_run event github.sha
+      # is the default branch's CURRENT head, which may already be a newer, unvalidated
+      # push. Manual dispatch deploys the selected ref's head (github.sha).
+      # Semgrep's workflow_run pwn-request rule fires on any checkout of head_sha; here
+      # the job's `if:` above only admits a successful CI run of `main` in THIS repository
+      # (never a fork or PR head), so the checked-out code is always trusted main.
+      # nosemgrep: yaml.github-actions.security.workflow-run-target-code-checkout.workflow-run-target-code-checkout
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           persist-credentials: false
       - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3.6.3
         with: { install: true, cache: true }
 
+      # The contract package lives on GitHub Packages. A package published from
+      # another repo is readable by this repo's GITHUB_TOKEN only once the
+      # package grants it access (aws.contract.template docs/operations);
+      # PACKAGES_READ_TOKEN (a PAT with read:packages) is the fallback.
+      - name: Configure registry auth
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN || secrets.GITHUB_TOKEN }}
+        run: echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" >> "$HOME/.npmrc"
+
       - run: pnpm install --frozen-lockfile
 
-      # Build the artifacts Terraform packages (Lambda bundles) and render the
-      # gateway spec — all from the contract. Runs BEFORE cloud credentials exist.
+      # Render the gateway spec from the pinned contract and build the Lambda
+      # bundle Terraform packages. Runs BEFORE cloud credentials exist.
       - run: task gen
       - run: task build
 
@@ -83,7 +117,7 @@ jobs:
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: tfplan-${{ env.ENV }}-${{ github.run_id }}
-          path: ${{ env.TF_DIR }}/tfplan
+          path: ${{ env.TF_ENV_DIR }}/tfplan
           if-no-files-found: ignore
           retention-days: 30
 
@@ -107,5 +141,5 @@ jobs:
       - name: Smoke test (health + gateway behaviour)
         if: ${{ env.ENV != 'prod' }}
         run: |
-          URL=$(terraform -chdir="$TF_DIR" output -raw api_invoke_url)
+          URL=$(terraform -chdir="$TF_ENV_DIR" output -raw api_invoke_url)
           task smoke ENV="$ENV" URL="$URL"

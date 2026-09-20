@@ -6,6 +6,10 @@ variable "service_name" {
   type    = string
   default = "todo-api"
 }
+variable "platform_name" {
+  type    = string
+  default = "platform"
+}
 variable "allowed_account_ids" {
   type        = list(string)
   default     = []
@@ -23,27 +27,11 @@ variable "enable_waf" {
   type    = bool
   default = false
 }
-variable "enable_egress_static_ip" {
-  type    = bool
-  default = false
-}
-variable "enable_ingress_static_ip" {
-  type    = bool
-  default = false
-}
 variable "custom_domain_enabled" {
   type    = bool
   default = false
 }
-variable "domain_name" {
-  type    = string
-  default = null
-}
-variable "hosted_zone_id" {
-  type    = string
-  default = null
-}
-variable "alarm_email" {
+variable "custom_hostname" {
   type    = string
   default = null
 }
@@ -68,19 +56,6 @@ variable "lambda_reserved_concurrency" {
 variable "cors_origin" {
   type    = string
   default = "*"
-}
-variable "callback_urls" {
-  type    = list(string)
-  default = ["http://localhost:3000/callback"]
-}
-variable "logout_urls" {
-  type    = list(string)
-  default = ["http://localhost:3000/"]
-}
-variable "manage_apigw_account_settings" {
-  type        = bool
-  default     = true
-  description = "Exactly ONE env per AWS account+region may manage the API Gateway account role; set false in the others."
 }
 variable "log_retention_days" {
   type    = number

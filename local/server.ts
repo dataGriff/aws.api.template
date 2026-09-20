@@ -21,7 +21,7 @@ const PORT = Number(process.env.PORT ?? 3000);
 const HOST = process.env.HOST ?? "127.0.0.1";
 const STAGE = "/v1";
 
-// Route templates mirror api/openapi.yaml (and the handler's router).
+// Route templates mirror the contract (@datagriff/todo-api-contract) and the handler's router.
 const ROUTES: { re: RegExp; resource: string; params: string[] }[] = [
   { re: /^\/health$/, resource: "/health", params: [] },
   { re: /^\/todos$/, resource: "/todos", params: [] },
@@ -131,5 +131,5 @@ server.on("clientError", (err: NodeJS.ErrnoException, socket) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`Local API on http://${HOST}:${PORT}${STAGE}  (Prism mock on :4010)`);
+  console.log(`Local API on http://${HOST}:${PORT}${STAGE} `);
 });

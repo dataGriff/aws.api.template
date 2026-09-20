@@ -5,11 +5,15 @@
 //        ^ every migration via node-pg-migrate      ^
 //        |                                          |  real HTTP
 //        +-- provider: Schemathesis (--checks all, stateful via links)
-//        +-- consumer: the generated SDK through every operation (sdk-consumer.ts)
-//        +-- collection: httpyac replays the generated .http files
+//        +-- consumer: the published client through every operation (sdk-consumer.ts)
+//        +-- collection: httpyac replays the package's .http files
 //
-// Backward compatibility of the contract itself is a separate, Docker-free
-// gate: `task contract:compat` (oasdiff against the base branch).
+// The contract, the client and the collection all come from the installed
+// @datagriff/todo-api-contract package: this layer proves the API honours the
+// exact version it pins.
+//
+// Backward compatibility of the contract itself is the contract repo's gate
+// (oasdiff); a major bump of the package is the signal to change this API.
 //
 // What it does NOT cover: anything API Gateway does in front of the Lambda
 // (Cognito authorizer, request validator, gateway responses, CORS, throttling,
@@ -29,6 +33,7 @@ import { dirname, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { parse } from "yaml";
 import { runSdkConsumer } from "./sdk-consumer.js";
+import { collectionPath, contractPath, contractVersion } from "../helpers/contract.js";
 
 const execFile = promisify(execFileCb);
 
@@ -177,6 +182,7 @@ async function runSchemathesis(baseUrl: string, token: string): Promise<void> {
     `▶ provider conformance: schemathesis --checks all (${EXAMPLES} examples per operation)`,
   );
   const code = await run("./scripts/schemathesis.sh", [], {
+    SCHEMA: contractPath,
     API_URL: baseUrl,
     API_TOKEN: token,
     API_KEY: "local-dev-key",
@@ -198,7 +204,7 @@ type HttpyacReport = {
 
 // Status codes each operation declares in the contract, keyed by operationId.
 function declaredStatuses(): Map<string, Set<number>> {
-  const spec = parse(readFileSync(join(root, "api/openapi.yaml"), "utf8")) as {
+  const spec = parse(readFileSync(contractPath, "utf8")) as {
     paths: Record<
       string,
       Record<string, { operationId?: string; responses?: Record<string, unknown> }>
@@ -222,8 +228,8 @@ async function httpyac(
 ): Promise<HttpyacReport> {
   const args = [
     "send",
-    "collections/todos.http",
-    "collections/health.http",
+    collectionPath("todos.http"),
+    collectionPath("health.http"),
     "--all",
     "--env",
     "local",
@@ -231,6 +237,8 @@ async function httpyac(
     `baseUrl=${baseUrl}`,
     "--var",
     `token=${token}`,
+    "--var",
+    "apiKey=local-dev-key",
     ...extraVars.flatMap((v) => ["--var", v]),
     "--json",
     "--output",
@@ -300,6 +308,7 @@ async function runHttpCollection(baseUrl: string, token: string): Promise<void> 
 
 // --- main -------------------------------------------------------------------
 try {
+  console.log(`▶ contract under test: @datagriff/todo-api-contract ${contractVersion}`);
   const databaseUrl = await startDatabase();
   const port = Number(process.env.HTTP_TEST_PORT ?? (await freePort()));
   const baseUrl = await startServer(databaseUrl, port);

@@ -13,28 +13,17 @@ skip-check:
   - CKV_AWS_293 # RDS instance deletion protection            -> var.deletion_protection
   - CKV_AWS_139 # RDS cluster deletion protection             -> var.deletion_protection
   - CKV_AWS_157 # RDS Multi-AZ                                -> var.db_multi_az
-  - CKV_AWS_150 # NLB deletion protection                     -> var.deletion_protection
   - CKV_AWS_353 # Performance Insights                        -> derived from instance class (unsupported on micro/small)
-  - CKV2_AWS_29 # API Gateway protected by WAF                -> var.enable_waf (on in staging/prod tfvars)
+  - CKV2_AWS_29 # API Gateway protected by WAF                -> var.enable_waf attaches the platform ACL (on in staging/prod tfvars)
   - CKV2_AWS_5 # SGs attached to a resource: they are, via module inputs Checkov does not follow
-  # --- Not applicable to a synchronous API Lambda / Cognito trigger.
-  - CKV_AWS_116 # Dead-letter queue only applies to asynchronous invocations
-  - CKV_AWS_115 # Reserved concurrency on the Cognito trigger would throttle sign-ins; the API Lambda has it
-  - CKV_AWS_117 # The Cognito trigger touches no VPC resource; a VPC would only add cold-start latency
+  # --- Not applicable to a synchronous API Lambda.
+  - CKV_AWS_116 # Dead-letter queue only applies to asynchronous invocations (the API Lambda is synchronous)
   - CKV_AWS_272 # Code signing: artifacts are built from source in CI behind OIDC; signing config is an opt-in extension
   # --- Deliberate design choices.
   - CKV_AWS_120 # API Gateway stage caching
   - CKV_AWS_225 # API Gateway method caching: per-user, authenticated CRUD responses must not be cached at the edge
   - CKV2_AWS_51 # Client certificates authenticate the gateway to a backend server; the backend here is Lambda proxy
   - CKV_OPENAPI_5 # /health is intentionally unauthenticated (liveness probe); every other operation is secured
+  - CKV_OPENAPI_21 # access_token_claims.cognito:groups (documentation of the JWT, never a request/response body) has no maxItems; every body array is bounded by its schema. Drop once the contract adds maxItems to that claim.
   - CKV2_AWS_27 # Aurora query logging of EVERY statement (log_statement=all) is too noisy/costly for an OLTP API; ddl + slow-query logging can be added to the cluster parameter group
   - CKV2_AWS_8 # Aurora automated backups (backup_retention_period) are used instead of an AWS Backup plan
-  - CKV_AWS_394 # Availability zones are sliced from the sorted list of the region's AZs; new AZs sort after the existing ones
-  # --- Terraform state bucket (bootstrap): logging/replication/notifications would need a second bucket
-  #     for a low-volume, versioned, CMK-encrypted, TLS-only bucket.
-  - CKV_AWS_18 # S3 access logging
-  - CKV_AWS_144 # S3 cross-region replication
-  - CKV2_AWS_62 # S3 event notifications
-  # --- Opt-in ingress-static-ip module: both need an S3 bucket and are documented follow-ups.
-  - CKV_AWS_75 # Global Accelerator flow logs
-  - CKV_AWS_91 # NLB access logs (the API Gateway access log covers every forwarded request)
