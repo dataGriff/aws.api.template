@@ -14,8 +14,16 @@ terraform {
 # is this API's: its Lambda, REST API, database + proxy + secret, idempotency
 # table, alarms and hostname.
 
+data "aws_caller_identity" "current" {}
+data "aws_partition" "current" {}
+
 locals {
   name = "${var.service_name}-${var.env}"
+  # The platform bootstrap issues one workload permissions boundary per service
+  # and env (aws.infra.template, modules/github-oidc) and only lets this
+  # service's deploy role create IAM roles that carry it. Its name is a
+  # convention, so it is derived rather than read from the interface.
+  workload_boundary_arn = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:policy/${local.name}-workload-boundary"
   tags = merge(var.tags, {
     Service     = var.service_name
     Environment = var.env
@@ -147,16 +155,17 @@ module "database" {
 }
 
 module "rds_proxy" {
-  count                  = var.enable_rds_proxy ? 1 : 0
-  source                 = "../modules/rds-proxy"
-  name                   = local.name
-  region                 = var.region
-  subnet_ids             = module.platform.private_subnet_ids
-  security_group_ids     = [aws_security_group.proxy.id]
-  secret_arn             = module.secrets.secret_arn
-  db_instance_identifier = var.db_engine == "rds" ? module.database.db_identifier : null
-  db_cluster_identifier  = var.db_engine == "aurora" ? module.database.db_identifier : null
-  tags                   = local.tags
+  count                    = var.enable_rds_proxy ? 1 : 0
+  source                   = "../modules/rds-proxy"
+  name                     = local.name
+  region                   = var.region
+  subnet_ids               = module.platform.private_subnet_ids
+  security_group_ids       = [aws_security_group.proxy.id]
+  secret_arn               = module.secrets.secret_arn
+  db_instance_identifier   = var.db_engine == "rds" ? module.database.db_identifier : null
+  db_cluster_identifier    = var.db_engine == "aurora" ? module.database.db_identifier : null
+  permissions_boundary_arn = local.workload_boundary_arn
+  tags                     = local.tags
 }
 
 resource "aws_dynamodb_table" "idempotency" {
@@ -186,27 +195,28 @@ locals {
 }
 
 module "lambda_api" {
-  source                 = "../modules/lambda-api"
-  name                   = local.name
-  env                    = var.env
-  region                 = var.region
-  subnet_ids             = module.platform.private_subnet_ids
-  security_group_ids     = [aws_security_group.lambda.id]
-  dist_dir               = var.api_dist_dir
-  memory_size            = var.lambda_memory_size
-  reserved_concurrency   = var.lambda_reserved_concurrency
-  log_retention_days     = var.log_retention_days
-  kms_key_arn            = module.platform.ops_kms_key_arn
-  data_kms_key_arn       = module.platform.data_kms_key_arn
-  db_host                = local.db_host
-  db_name                = var.db_name
-  db_user                = var.db_username
-  secret_arn             = module.secrets.secret_arn
-  rds_iam_auth           = var.enable_rds_proxy
-  rds_proxy_resource_id  = var.enable_rds_proxy ? module.rds_proxy[0].proxy_resource_id : null
-  idempotency_table_name = aws_dynamodb_table.idempotency.name
-  idempotency_table_arn  = aws_dynamodb_table.idempotency.arn
-  tags                   = local.tags
+  source                   = "../modules/lambda-api"
+  name                     = local.name
+  env                      = var.env
+  region                   = var.region
+  subnet_ids               = module.platform.private_subnet_ids
+  security_group_ids       = [aws_security_group.lambda.id]
+  dist_dir                 = var.api_dist_dir
+  memory_size              = var.lambda_memory_size
+  reserved_concurrency     = var.lambda_reserved_concurrency
+  log_retention_days       = var.log_retention_days
+  kms_key_arn              = module.platform.ops_kms_key_arn
+  data_kms_key_arn         = module.platform.data_kms_key_arn
+  db_host                  = local.db_host
+  db_name                  = var.db_name
+  db_user                  = var.db_username
+  secret_arn               = module.secrets.secret_arn
+  rds_iam_auth             = var.enable_rds_proxy
+  rds_proxy_resource_id    = var.enable_rds_proxy ? module.rds_proxy[0].proxy_resource_id : null
+  idempotency_table_name   = aws_dynamodb_table.idempotency.name
+  idempotency_table_arn    = aws_dynamodb_table.idempotency.arn
+  permissions_boundary_arn = local.workload_boundary_arn
+  tags                     = local.tags
 }
 
 module "api_gateway" {

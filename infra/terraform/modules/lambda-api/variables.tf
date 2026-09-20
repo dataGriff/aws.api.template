@@ -67,3 +67,7 @@ variable "data_kms_key_arn" {
   type        = string
   description = "CMK protecting the DB secret and idempotency table (grants kms:Decrypt to the role)"
 }
+variable "permissions_boundary_arn" {
+  type        = string
+  description = "The service's workload permissions boundary (platform-issued); every role this module creates must carry it"
+}

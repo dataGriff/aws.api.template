@@ -18,7 +18,10 @@ data "aws_iam_policy_document" "assume" {
 resource "aws_iam_role" "proxy" {
   name_prefix        = "${var.name}-proxy-"
   assume_role_policy = data.aws_iam_policy_document.assume.json
-  tags               = var.tags
+  # Required by the platform: the service deploy role may only create roles that
+  # carry its workload boundary (see aws.infra.template docs/security).
+  permissions_boundary = var.permissions_boundary_arn
+  tags                 = var.tags
 }
 
 data "aws_iam_policy_document" "secret" {

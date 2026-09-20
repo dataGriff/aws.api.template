@@ -30,6 +30,9 @@ The template is secure-by-default.
   credential secret, idempotency table) and `ops` (its log groups, Lambda environment variables);
   TLS enforced by the server (`rds.force_ssl = 1`) as well as by RDS Proxy; multi-AZ, backups and
   deletion protection are mandatory in prod (stack validations).
+- **Workload boundary**: the Lambda and RDS Proxy roles carry the platform-issued permissions
+  boundary `<service>-<env>-workload-boundary` (the deploy role cannot create roles without it),
+  so this API's workloads can never hold more than the platform's workload allowlist.
 - **Platform inputs**: read only from `/platform/<env>/…` (String/StringList identifiers, never
   secrets) by a deploy role that the platform scoped to this service's names, its own state and
   that prefix. No platform state is ever read.

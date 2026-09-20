@@ -24,5 +24,6 @@ skip-check:
   - CKV_AWS_225 # API Gateway method caching: per-user, authenticated CRUD responses must not be cached at the edge
   - CKV2_AWS_51 # Client certificates authenticate the gateway to a backend server; the backend here is Lambda proxy
   - CKV_OPENAPI_5 # /health is intentionally unauthenticated (liveness probe); every other operation is secured
+  - CKV_OPENAPI_21 # access_token_claims.cognito:groups (documentation of the JWT, never a request/response body) has no maxItems; every body array is bounded by its schema. Drop once the contract adds maxItems to that claim.
   - CKV2_AWS_27 # Aurora query logging of EVERY statement (log_statement=all) is too noisy/costly for an OLTP API; ddl + slow-query logging can be added to the cluster parameter group
   - CKV2_AWS_8 # Aurora automated backups (backup_retention_period) are used instead of an AWS Backup plan

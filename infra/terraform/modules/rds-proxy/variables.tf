@@ -15,3 +15,7 @@ variable "tags" {
   type    = map(string)
   default = {}
 }
+variable "permissions_boundary_arn" {
+  type        = string
+  description = "The service's workload permissions boundary (platform-issued); every role this module creates must carry it"
+}

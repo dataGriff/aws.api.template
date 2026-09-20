@@ -163,6 +163,10 @@ run "dev_defaults" {
     condition     = module.platform.private_subnet_ids == tolist(["subnet-aaa", "subnet-bbb"])
     error_message = "the StringList parameter must be split into subnet ids"
   }
+  assert {
+    condition     = module.lambda_api.role_permissions_boundary == "arn:aws:iam::123456789012:policy/todo-api-dev-workload-boundary" && module.rds_proxy[0].role_permissions_boundary == "arn:aws:iam::123456789012:policy/todo-api-dev-workload-boundary"
+    error_message = "every role this stack creates must carry the platform-issued workload boundary <service>-<env>-workload-boundary"
+  }
 }
 
 run "platform_nat_opens_egress" {
